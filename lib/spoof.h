@@ -29,7 +29,7 @@ void *spoof(const void *trampoline, void *function, int nparam, ...);
 /* clang-format on */
 
 /** Reusable SPOOF macro */
-#define SPOOF(...) BLACKBEARD_VA_NARGS_CALL_OVERLOAD(_VA_SPOOF_, __VA_ARGS__)
+#define SPOOF(...) BOB_VA_NARGS_CALL_OVERLOAD(_VA_SPOOF_, __VA_ARGS__)
 
 /** \} */
 

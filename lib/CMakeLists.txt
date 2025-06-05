@@ -21,9 +21,11 @@ set(INC_SYS
 # Define Source Files
 
 set(SRC
+	config.h
 	spoof.asm
 	spoof.c
 	spoof.h
+	xorstr.hh
 	variadic.h
 
 )

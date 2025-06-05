@@ -4,7 +4,6 @@
 set(INC
 	# Internal Include Directories
 	PUBLIC .
-	PRIVATE ..
 	
 	# External Include Directories
 	
@@ -22,6 +21,12 @@ set(INC_SYS
 # Define Source Files
 
 set(SRC
+	mod.c
+	mod.h
+	native.cc
+	native.h
+	proc.c
+	proc.h
 
 )
 
@@ -30,7 +35,7 @@ set(SRC
 
 set(LIB
 	# Internal Library Dependencies
-	PUBLIC bb_utils
+	PUBLIC pickles
 	
 	# External Library Dependencies
 	
@@ -39,6 +44,6 @@ set(LIB
 # -----------------------------------------------------------------------------
 # Declare Library
 
-# add_library(bb ${SRC})
-# target_include_directories(bb ${INC} ${INC_SYS})
-# target_link_libraries(bb ${LIB})
+add_library(bob ${SRC})
+target_include_directories(bob ${INC} ${INC_SYS})
+target_link_libraries(bob ${LIB})

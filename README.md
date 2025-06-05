@@ -10,5 +10,6 @@
   <p>
     <b>Note</b>: The library leverages CMake for building, statically building and linking this library simply won't work!
 	It is recommended to use CMake on your project and link the library, the output will change each time you compile to avoid signature detection!
+	Needless to say most of the functions here required administrator privillages to operate correctly!
   </p>
 </div>
