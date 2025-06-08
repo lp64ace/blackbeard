@@ -40,8 +40,8 @@ int main(void) {
 		return -1;
 	}
 
-	BobModule *module = BOB_mmap_image(process, NULL, (const void *)datatoc_creator_dll, datatoc_creator_dll_size, 0);
-	if (!module) {
+	BobModule *address = BOB_mmap_image(process, NULL, (const void *)datatoc_creator_dll, datatoc_creator_dll_size, 0);
+	if (!address) {
 		fprintf(stdout, XORSTR("Failed to manual map module from memory into process...\n"));
 		return -1;
 	}
