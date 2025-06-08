@@ -32,23 +32,23 @@ This project allows manual loading of Windows executables (DLLs/EXEs) into memor
 #include <stdio.h>
 #include <stdlib.h>
 
-extern "C" const int datatoc_example_dll_size;
-extern "C" const char datatoc_example_dll[];
+extern "C" const int example_dll_size;
+extern "C" const char example_dll[];
 
 int main(void) {
-	BOB_native_init();
-	BobProc *process = BOB_process_open(XORSTR("notepad.exe"));
-	if (!process) {
-		fprintf(stdout, XORSTR("Notepad.exe is not running...\n"));
-		return -1;
-	}
-	BobModule *address = BOB_mmap_image(process, NULL, datatoc_example_dll, datatoc_example_dll_size, 0);
-	if (!address) {
-		fprintf(stdout, XORSTR("Failed...\n"));
-		return -1;
-	}
-	BOB_process_close(process);
-	BOB_native_exit();
-	return 0;
+  BOB_native_init();
+  BobProc *process = BOB_process_open(XORSTR("notepad.exe"));
+  if (!process) {
+    fprintf(stdout, XORSTR("Notepad.exe is not running...\n"));
+    return -1;
+  }
+  BobModule *address = BOB_mmap_image(process, NULL, example_dll, example_dll_size, 0);
+  if (!address) {
+    fprintf(stdout, XORSTR("Failed...\n"));
+    return -1;
+  }
+  BOB_process_close(process);
+  BOB_native_exit();
+  return 0;
 }
 ```
