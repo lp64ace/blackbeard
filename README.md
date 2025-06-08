@@ -2,8 +2,9 @@
 	<p align="center">
 		<img src="img/logo.png" alt="Bob" width="128"/>
 	</p>
-	<h1>🧠 Manual PE Mapper</h1>
 </div>
+
+## 🧠 Manual PE Mappe
 
 **A lightweight PE (Portable Executable) mapper written in C/C++ with CMake support.**
 This project allows manual loading of Windows executables (DLLs/EXEs) into memory without relying on LoadLibrary, or any external libraries.
