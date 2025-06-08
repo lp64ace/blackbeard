@@ -1,28 +1,37 @@
 #ifndef MOD_H
 #define MOD_H
 
+#include "proc.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct ModuleInformation {
-	uintptr_t address;
-	char name[512];
-	char path[512];
-	size_t size;
-} ModuleInformation;
+typedef struct BobModule BobModule;
+
+/* -------------------------------------------------------------------- */
+/** \name Module Native
+ * \{ */
 
 enum {
-	SEARCH_HEADERS,
-	SEARCH_SECTIONS,
-	SEARCH_LDR,
+	SEARCH_LOADER = 1 << 0,
+	SEARCH_HEADER = 1 << 1,
+	SEARCH_SECTION = 1 << 2,
+
+	SEARCH_DEFAULT = SEARCH_LOADER,
+	SEARCH_ALL = 0xFF,
 };
 
 /**
- * Locates the base address inside the remote process that matches the specified name or path.
- * \note The name encoding must be UTF8 and the resulting pointer is owned by the remote process!
+ * Painfully slow method to locate a module in a remote process.
  */
-void *BOB_remote_module_address(void *process, const char *name, int search);
+struct BobModule *BOB_module_open(struct BobProc *process, const char *name, int search);
+/** Release any address used by #BobModule, although this function does nothing. */
+void BOB_module_close(struct BobModule *module);
+
+void *BOB_module_export(struct BobProc *process, struct BobModule *module, const char *name);
+
+/** \} */
 
 #ifdef __cplusplus
 }

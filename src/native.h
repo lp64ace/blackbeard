@@ -19,9 +19,13 @@ extern "C" {
 
 typedef NTSTATUS(NTAPI *fnNtQueryInformationProcess)(IN HANDLE ProcessHandle, IN PROCESSINFOCLASS ProcessInformationClass, OUT PVOID ProcessInformation, IN ULONG ProcessInformationLength, OUT PULONG ReturnLength OPTIONAL);
 typedef NTSTATUS(NTAPI *fnNtQueryVirtualMemory)(IN HANDLE ProcessHandle, IN PVOID BaseAddress, IN INT MemoryInformationClass, OUT PVOID MemoryInformation, IN SIZE_T MemoryInformationLength, OUT PSIZE_T ReturnLength);
+typedef NTSTATUS(NTAPI *fnNtCreateThreadEx)(OUT PHANDLE ThreadHandle, IN ACCESS_MASK DesiredAccess, IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL, IN HANDLE ProcessHandle, IN LPVOID Routine, IN PVOID Argument OPTIONAL, IN ULONG CreateFlags, IN SIZE_T ZeroBits, IN SIZE_T StackSize, IN SIZE_T MaximumStackSize, IN LPVOID AttributeList OPTIONAL);
+typedef NTSTATUS(NTAPI *fnNtCreateEvent)(OUT HANDLE EventHandle, IN ACCESS_MASK DesiredAccess, IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL, IN INT EventType, IN BOOLEAN InitialState);
 
 extern fnNtQueryInformationProcess _NtQueryInformationProcess;
 extern fnNtQueryVirtualMemory _NtQueryVirtualMemory;
+extern fnNtCreateThreadEx _NtCreateThreadEx;
+extern fnNtCreateEvent _NtCreateEvent;
 
 /** \} */
 

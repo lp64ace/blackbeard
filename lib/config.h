@@ -1,9 +1,25 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
+#define BOB_DEBUG_MESSAGES 0
+
+#if BOB_DEBUG_MESSAGES
+#	include <stdio.h>
+#	define BOB_DEBUG_PRINT(...) fprintf(__VA_ARGS__)
+#else
+#	define BOB_DEBUG_PRINT(...) ((void)0)
+#endif
+
+
 #include <math.h>
 #include <stdarg.h>
 #include <string.h>
+
+#ifndef BOB_ALLOC
+#	include <malloc.h>
+#	define BOB_ALLOC(size) malloc(size)
+#	define BOB_FREE(ptr) free(ptr)
+#endif
 
 /* -------------------------------------------------------------------- */
 /** \name Pointer Macros
@@ -32,6 +48,9 @@
 #define STRINGIFY_ARG(x) "" #x
 #define STRINGIFY_APPEND(a, b) "" a #b
 #define STRINGIFY(x) STRINGIFY_APPEND("", x)
+
+#define STRINGIFY_TOKEN(Define) #Define
+#define STRINGIFY_DEFINE(Define) STRINGIFY_TOKEN(Define)
 
 /* generic strcmp macros */
 #if defined(_MSC_VER)

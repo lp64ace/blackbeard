@@ -16,6 +16,8 @@
 
 fnNtQueryInformationProcess _NtQueryInformationProcess;
 fnNtQueryVirtualMemory _NtQueryVirtualMemory;
+fnNtCreateThreadEx _NtCreateThreadEx;
+fnNtCreateEvent _NtCreateEvent;
 
 /** \} */
 
@@ -37,6 +39,8 @@ void BOB_native_init() {
 	if (ntdll) {
 		_NtQueryInformationProcess = (fnNtQueryInformationProcess)SPOOF(NULL, GetProcAddress, ntdll, reinterpret_cast<LPCSTR>(XORSTR("NtQueryInformationProcess")));
 		_NtQueryVirtualMemory = (fnNtQueryVirtualMemory)SPOOF(NULL, GetProcAddress, ntdll, reinterpret_cast<LPCSTR>(XORSTR("NtQueryVirtualMemory")));
+		_NtCreateThreadEx = (fnNtCreateThreadEx)SPOOF(NULL, GetProcAddress, ntdll, reinterpret_cast<LPCSTR>(XORSTR("NtCreateThreadEx")));
+		_NtCreateEvent = (fnNtCreateEvent)SPOOF(NULL, GetProcAddress, ntdll, reinterpret_cast<LPCSTR>(XORSTR("NtCreateEvent")));
 	}
 }
 

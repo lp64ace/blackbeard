@@ -27,6 +27,10 @@ set(SRC
 	native.h
 	proc.c
 	proc.h
+	remote.cc
+	remote.h
+	thread.c
+	thread.h
 
 )
 
