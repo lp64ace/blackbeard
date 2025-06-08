@@ -423,7 +423,6 @@ BobRemote *BOB_remote_open(struct BobProc *process, bool x64) {
 		for (;;) {
 			SleepEx(5, TRUE);
 		}
-		ExitThread(SetEvent(m_hWaitEvent));
 	*/
 
 	bob_remote_begin_call64(ASM);
