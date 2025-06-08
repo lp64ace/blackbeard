@@ -19,23 +19,29 @@
 
 ---
 
-## 🚀 Features
-
-* Manual mapping of PE files into remote processes
-* Remote thread injection
-* Memory patching and function hooking
-* Process and module enumeration
-* Obfuscation support to avoid static signature detection
+<div align="center">
+	<h1>🚀 Features</h1>
+	<p>
+		* Manual mapping of PE files into remote processes
+		* Remote thread injection
+		* Memory patching and function hooking
+		* Process and module enumeration
+		* Obfuscation support to avoid static signature detection
+	</p>
+</div>
 
 ---
 
-## ⚙️ Build Instructions
+<div align="center">
+	<h1>⚙️ Build Instructions</h1>
+	<p>
+		<b>Note</b>: This library uses <b>CMake<b> for building. Attempting to build and link it manually (e.g., static linking) will <b>not work</b> properly.
 
-> **Note:** This library uses **CMake** for building. Attempting to build and link it manually (e.g., static linking) will **not work** properly.
-
-* You must use CMake to build and integrate Bob into your project.
-* The compiled output is intentionally varied each build to help evade signature detection mechanisms.
-* Many of the library's functions require **administrator privileges**.
+		<i>You must use CMake to build and integrate Bob into your project.</i>
+		<i>The compiled output is intentionally varied each build to help evade signature detection mechanisms.</i>
+		<i>Many of the library's functions require <b>administrator privileges</b>.</i>
+	</p>
+</div>
 
 ---
 
@@ -74,9 +80,3 @@ int main(void) {
 	return 0;
 }
 ```
-
----
-
-## ⚠️ Disclaimer
-
-This project is intended for educational and research purposes only. The author is not responsible for any misuse of this library. Use responsibly and within the bounds of applicable laws.
