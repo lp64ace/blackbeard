@@ -4,7 +4,7 @@
 	</p>
 </div>
 
-## 🧠 Manual PE Mappe
+## 🧠 Manual PE Mapping
 
 **A lightweight PE (Portable Executable) mapper written in C/C++ with CMake support.**
 This project allows manual loading of Windows executables (DLLs/EXEs) into memory without relying on LoadLibrary, or any external libraries.
