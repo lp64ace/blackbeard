@@ -3,47 +3,17 @@
 		<img src="img/logo.png" alt="Bob" width="128"/>
 	</p>
 	<h1>Bob</h1>
-	<p>
-		<b>Note</b>: This library is currently under construction. Its purpose is to provide virtual memory manipulation capabilities on Windows systems, with applications in advanced tasks such as module injection, hooking, remote code execution, and malware analysis or development.
-	</p>
 </div>
 
-<div align="center">
-	<h1>Usage</h1>
-	<p>
-		<b>Note</b>: The library leverages CMake for building, statically building and linking this library simply won't work!
-		It is recommended to use CMake on your project and link the library, the output will change each time you compile to avoid signature detection!
-		Needless to say most of the functions here required administrator privillages to operate correctly!
-	</p>
-</div>
+Modern manual mapping library with C99-compatible linker support for Portable Executable (PE) modules and DLLs.
 
----
+## 🚀 Features
 
-<div align="center">
-	<h1>🚀 Features</h1>
-	<p>
-		* Manual mapping of PE files into remote processes
-		* Remote thread injection
-		* Memory patching and function hooking
-		* Process and module enumeration
-		* Obfuscation support to avoid static signature detection
-	</p>
-</div>
-
----
-
-<div align="center">
-	<h1>⚙️ Build Instructions</h1>
-	<p>
-		<b>Note</b>: This library uses <b>CMake<b> for building. Attempting to build and link it manually (e.g., static linking) will <b>not work</b> properly.
-
-		<i>You must use CMake to build and integrate Bob into your project.</i>
-		<i>The compiled output is intentionally varied each build to help evade signature detection mechanisms.</i>
-		<i>Many of the library's functions require <b>administrator privileges</b>.</i>
-	</p>
-</div>
-
----
+* Manual mapping of PE files into remote processes
+* Remote thread injection
+* Memory patching and function hooking
+* Process and module enumeration
+* Obfuscation support to evade static signature detection
 
 ## 📦 Usage Example
 
