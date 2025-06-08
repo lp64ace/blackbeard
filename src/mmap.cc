@@ -658,24 +658,27 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_cookie(ManualMap<T> *s
 
 		cookie = BOB_process_index(self->process) ^ BOB_remote_thread_index(self->worker) ^ reinterpret_cast<uintptr_t>(&cookie);
 
-#ifdef _M_AMD64
-		cookie ^= *reinterpret_cast<unsigned __int64 *>(&systime);
-		cookie ^= (PerformanceCount.QuadPart << 32) ^ PerformanceCount.QuadPart;
-		cookie &= 0xFFFFFFFFFFFF;
+		if (self->is64()) {
+			cookie ^= *reinterpret_cast<unsigned __int64 *>(&systime);
+			cookie ^= (PerformanceCount.QuadPart << 32) ^ PerformanceCount.QuadPart;
+			cookie &= 0xFFFFFFFFFFFF;
 
-		if (cookie == 0x2B992DDFA232)
-			cookie++;
-#else
+			if (cookie == 0x2B992DDFA232) {
+				cookie++;
+			}
+		}
+		else {
+			cookie ^= systime.dwHighDateTime ^ systime.dwLowDateTime;
+			cookie ^= PerformanceCount.LowPart;
+			cookie ^= PerformanceCount.HighPart;
 
-		cookie ^= systime.dwHighDateTime ^ systime.dwLowDateTime;
-		cookie ^= PerformanceCount.LowPart;
-		cookie ^= PerformanceCount.HighPart;
-
-		if (cookie == 0xBB40E64E)
-			cookie++;
-		else if (!(cookie & 0xFFFF0000))
-			cookie |= (cookie | 0x4711) << 16;
-#endif
+			if (cookie == 0xBB40E64E) {
+				cookie++;
+			}
+			else if (!(cookie & 0xFFFF0000)) {
+				cookie |= (cookie | 0x4711) << 16;
+			}
+		}
 
 		void *address = POINTER_OFFSET(self->config->SecurityCookie, reinterpret_cast<ptrdiff_t>(self->remote) - static_cast<ptrdiff_t>(self->base));
 		if (!BOB_process_write(self->process, address, &cookie, sizeof(cookie))) {
