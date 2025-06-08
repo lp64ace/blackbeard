@@ -423,6 +423,7 @@ BobRemote *BOB_remote_open(struct BobProc *process, bool x64) {
 		for (;;) {
 			SleepEx(5, TRUE);
 		}
+		ExitThread(SetEvent(m_hWaitEvent));
 	*/
 
 	bob_remote_begin_call64(ASM);
@@ -599,6 +600,12 @@ uint64_t BOB_remote_exec(struct BobRemote *remote, void *arg) {
 	return 0;
 }
 
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Queries
+ * \{ */
+
 uint64_t BOB_remote_saved(struct BobRemote *remote, int idx) {
 	BobRemote::Internal internal;
 	if (bob_remote_read(remote, &internal)) {
@@ -608,6 +615,10 @@ uint64_t BOB_remote_saved(struct BobRemote *remote, int idx) {
 		return internal.ret[idx];
 	}
 	return 0;
+}
+
+int BOB_remote_thread_index(struct BobRemote *remote) {
+	return BOB_thread_id(remote->thread);
 }
 
 /** \} */

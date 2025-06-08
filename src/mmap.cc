@@ -27,6 +27,7 @@ template<> struct ManualMapArch<uint32_t> {
 	IMAGE_THUNK_DATA32 *thunk;
 	IMAGE_THUNK_DATA32 *func;
 	const IMAGE_TLS_DIRECTORY32 *tls;
+	const IMAGE_LOAD_CONFIG_DIRECTORY32 *config;
 };
 
 template<> struct ManualMapArch<uint64_t> {
@@ -35,6 +36,7 @@ template<> struct ManualMapArch<uint64_t> {
 	IMAGE_THUNK_DATA64 *thunk;
 	IMAGE_THUNK_DATA64 *func;
 	const IMAGE_TLS_DIRECTORY64 *tls;
+	const IMAGE_LOAD_CONFIG_DIRECTORY64 *config;
 };
 
 template<typename T = uintptr_t> struct ManualMap : public ManualMapArch<T> {
@@ -478,7 +480,7 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_relocations(ManualMap<
 		return true;
 	}
 
-	ptrdiff_t delta = reinterpret_cast<uintptr_t>(self->remote) - static_cast<uintptr_t>(self->nt->OptionalHeader.ImageBase);
+	ptrdiff_t delta = reinterpret_cast<ptrdiff_t>(self->remote) - static_cast<ptrdiff_t>(self->nt->OptionalHeader.ImageBase);
 
 	const IMAGE_BASE_RELOCATION *itr;
 	DWORD size = bob_mmap_directory_size(self, self->source, IMAGE_DIRECTORY_ENTRY_BASERELOC);
@@ -545,7 +547,7 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_sections(ManualMap<T> 
 template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_exceptions(ManualMap<T> *self) {
 	const IMAGE_RUNTIME_FUNCTION_ENTRY *exptable = static_cast<const IMAGE_RUNTIME_FUNCTION_ENTRY *>(bob_mmap_directory(self, self->source, IMAGE_DIRECTORY_ENTRY_EXCEPTION));
 	if (exptable) {
-		void *address = POINTER_OFFSET(exptable, reinterpret_cast<uintptr_t>(self->remote) - reinterpret_cast<uintptr_t>(self->source));
+		void *address = POINTER_OFFSET(exptable, reinterpret_cast<ptrdiff_t>(self->remote) - reinterpret_cast<ptrdiff_t>(self->source));
 
 		BobModule *ntdll = BOB_module_open(self->process, XORSTR("ntdll.dll"), SEARCH_DEFAULT);
 		decltype(&RtlAddFunctionTable) _RtlAddFunctionTable = static_cast<decltype(&RtlAddFunctionTable)>(BOB_module_export(self->process, ntdll, XORSTR("RtlAddFunctionTable")));
@@ -645,6 +647,42 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_tls(ManualMap<T> *self
 }
 
 template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_cookie(ManualMap<T> *self) {
+	self->config = static_cast<decltype(self->config)>(bob_mmap_directory(self, self->source, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG));
+	if (self->config && self->config->SecurityCookie) {
+		FILETIME systime = {0};
+		LARGE_INTEGER PerformanceCount = {{0}};
+		uintptr_t cookie = 0;
+
+		GetSystemTimeAsFileTime(&systime);
+		QueryPerformanceCounter(&PerformanceCount);
+
+		cookie = BOB_process_index(self->process) ^ BOB_remote_thread_index(self->worker) ^ reinterpret_cast<uintptr_t>(&cookie);
+
+#ifdef _M_AMD64
+		cookie ^= *reinterpret_cast<unsigned __int64 *>(&systime);
+		cookie ^= (PerformanceCount.QuadPart << 32) ^ PerformanceCount.QuadPart;
+		cookie &= 0xFFFFFFFFFFFF;
+
+		if (cookie == 0x2B992DDFA232)
+			cookie++;
+#else
+
+		cookie ^= systime.dwHighDateTime ^ systime.dwLowDateTime;
+		cookie ^= PerformanceCount.LowPart;
+		cookie ^= PerformanceCount.HighPart;
+
+		if (cookie == 0xBB40E64E)
+			cookie++;
+		else if (!(cookie & 0xFFFF0000))
+			cookie |= (cookie | 0x4711) << 16;
+#endif
+
+		void *address = POINTER_OFFSET(self->config->SecurityCookie, reinterpret_cast<ptrdiff_t>(self->remote) - static_cast<ptrdiff_t>(self->base));
+		if (!BOB_process_write(self->process, address, &cookie, sizeof(cookie))) {
+			BOB_DEBUG_PRINT(stderr, XORSTR("[Error] Failed to write security cookie!"));
+			return false;
+		}
+	}
 	return true;
 }
 

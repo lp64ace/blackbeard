@@ -59,9 +59,18 @@ void BOB_remote_exit(struct BobRemote *remote);
 void BOB_remote_save(struct BobRemote *remote, int idx);
 
 uint64_t BOB_remote_exec(struct BobRemote *remote, void *arg);
-uint64_t BOB_remote_saved(struct BobRemote *remote, int idx);
 
 void BOB_remote_close(struct BobRemote *remote);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Queries
+ * \{ */
+
+uint64_t BOB_remote_saved(struct BobRemote *remote, int idx);
+
+int BOB_remote_thread_index(struct BobRemote *remote);
 
 /** \} */
 
