@@ -65,11 +65,6 @@ void BOB_module_api_set_namespace_10(BobProc *process, char *r_name, const char 
 
 	wchar_t name[MAX_PATH];
 	int length = MultiByteToWideChar(CP_UTF8, 0, utf8, MAX_PATH, name, MAX_PATH);
-	if (wcswcs(name, L"-0") != NULL) {
-		if (wcswcs(name, L"-0")[2] == '\0') {
-			wcswcs(name, L"-0")[0] = '\0';
-		}
-	}
 
 	if (peb->Reserved9[0]) {
 		PAPI_SET_NAMESPACE_ARRAY_10 map = (PAPI_SET_NAMESPACE_ARRAY_10)peb->Reserved9[0];
@@ -90,7 +85,7 @@ void BOB_module_api_set_namespace_10(BobProc *process, char *r_name, const char 
 				memset(physical, 0, sizeof(physical));
 				memcpy(physical, POINTER_OFFSET(map, host->ValueOffset), host->ValueLength);
 
-				if (!_wcsicmp(logical, name)) {
+				if (!_wcsnicmp(logical, name, value->NameLength / sizeof(wchar_t))) {
 					WideCharToMultiByte(CP_UTF8, 0, physical, ARRAYSIZE(physical), r_name, MAX_PATH, NULL, NULL);
 				}
 			}
