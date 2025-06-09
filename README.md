@@ -12,11 +12,12 @@ Executables sometimes use dynamically linked libraries (DLLs) a bit unorthodoxic
 
 Bob *builds* a remote thread and attaches a triggerable loop that can execute APC code. Each operation that needs to be run remotely on the target process is queued and run through that single thread using Just In Time, Assembly compilation!
 
-* The portable executable is loaded into memory and then parsed to load third-party imports from other dyanmically linked libraries.
-* After the third party dependencies of the portable executable are resolved we relocate every pointer to the new base address of the module.
-* Every section is copied and the charachteristics resolved to match the expectations, EXECUTABLE, READ, WRITE permissions resolved.
-* Exceptions, TLS and cookie procedures are triggered and initialized.
-* DllMain is called.
+* The portable executable is loaded into memory.
+* The module is parsed to resolve third-party imports.
+* Pointers are relocated to the module's new base address.
+* Sections are copied with appropriate permissions.
+* Exceptions, TLS, and security cookies are initialized.
+* DllMain is invoked.
 
 # Issues
 
