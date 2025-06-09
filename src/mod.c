@@ -10,6 +10,97 @@
 #include <stdlib.h>
 
 /* -------------------------------------------------------------------- */
+/** \name Windows 10
+ * \{ */
+
+typedef struct _API_SET_VALUE_ENTRY_10 {
+	ULONG Flags;
+	ULONG NameOffset;
+	ULONG NameLength;
+	ULONG ValueOffset;
+	ULONG ValueLength;
+} API_SET_VALUE_ENTRY_10, *PAPI_SET_VALUE_ENTRY_10;
+
+typedef struct _API_SET_VALUE_ARRAY_10 {
+	ULONG Flags;
+	ULONG NameOffset;
+	ULONG Unk;
+	ULONG NameLength;
+	ULONG DataOffset;
+	ULONG Count;
+} API_SET_VALUE_ARRAY_10, *PAPI_SET_VALUE_ARRAY_10;
+
+BOB_INLINE PAPI_SET_VALUE_ENTRY_10 API_SET_VALUE_ARRAY_10_entry(PAPI_SET_VALUE_ARRAY_10 self, void *map, DWORD i) {
+	return POINTER_OFFSET(map, self->DataOffset + i * sizeof(API_SET_VALUE_ENTRY_10));
+}
+
+typedef struct _API_SET_NAMESPACE_ENTRY_10 {
+	ULONG Limit;
+	ULONG Size;
+} API_SET_NAMESPACE_ENTRY_10, *PAPI_SET_NAMESPACE_ENTRY_10;
+
+typedef struct _API_SET_NAMESPACE_ARRAY_10 {
+	ULONG Version;
+	ULONG Size;
+	ULONG Flags;
+	ULONG Count;
+	ULONG Start;
+	ULONG End;
+	ULONG Unk[2];
+} API_SET_NAMESPACE_ARRAY_10, *PAPI_SET_NAMESPACE_ARRAY_10;
+
+BOB_INLINE PAPI_SET_NAMESPACE_ENTRY_10 API_SET_NAMESPACE_ARRAY_10_key(PAPI_SET_NAMESPACE_ARRAY_10 self, DWORD i) {
+	return POINTER_OFFSET(self, self->End + i * sizeof(API_SET_NAMESPACE_ENTRY_10));
+}
+
+BOB_INLINE PAPI_SET_VALUE_ARRAY_10 API_SET_NAMESPACE_ARRAY_10_value(PAPI_SET_NAMESPACE_ARRAY_10 self, PAPI_SET_NAMESPACE_ENTRY_10 key) {
+	return POINTER_OFFSET(self, self->Start + sizeof(API_SET_VALUE_ARRAY_10) * key->Size);
+}
+
+/** All of this part needs to be done again properly, with caching and better version managing! */
+void BOB_module_api_set_namespace_10(BobProc *process, char *r_name, const char *utf8) {
+	PEB *peb = NtCurrentTeb()->ProcessEnvironmentBlock;
+
+	strcpy(r_name, utf8);
+
+	wchar_t name[MAX_PATH];
+	int length = MultiByteToWideChar(CP_UTF8, 0, utf8, MAX_PATH, name, MAX_PATH);
+	if (wcswcs(name, L"-0") != NULL) {
+		if (wcswcs(name, L"-0")[2] == '\0') {
+			wcswcs(name, L"-0")[0] = '\0';
+		}
+	}
+
+	if (peb->Reserved9[0]) {
+		PAPI_SET_NAMESPACE_ARRAY_10 map = (PAPI_SET_NAMESPACE_ARRAY_10)peb->Reserved9[0];
+
+		for (DWORD i = 0; i < map->Count; i++) {
+			wchar_t logical[MAX_PATH];
+			wchar_t physical[MAX_PATH];
+
+			PAPI_SET_NAMESPACE_ENTRY_10 key = API_SET_NAMESPACE_ARRAY_10_key(map, i);
+			PAPI_SET_VALUE_ARRAY_10 value = API_SET_NAMESPACE_ARRAY_10_value(map, key);
+
+			memset(logical, 0, sizeof(logical));
+			memcpy(logical, POINTER_OFFSET(map, value->NameOffset), value->NameLength);
+
+			for (DWORD j = 0; j < value->Count; j++) {
+				PAPI_SET_VALUE_ENTRY_10 host = API_SET_VALUE_ARRAY_10_entry(value, map, j);
+
+				memset(physical, 0, sizeof(physical));
+				memcpy(physical, POINTER_OFFSET(map, host->ValueOffset), host->ValueLength);
+
+				if (!_wcsicmp(logical, name)) {
+					WideCharToMultiByte(CP_UTF8, 0, physical, ARRAYSIZE(physical), r_name, MAX_PATH, NULL, NULL);
+				}
+			}
+		}
+	}
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Procedure Native
  * \{ */
 
@@ -17,7 +108,7 @@ typedef void *(*fnBobCallbackLdr)(LDR_DATA_TABLE_ENTRY *entry, void *userdata);
 typedef void *(*fnBobCallbackSct)(PVOID *entry, UNICODE_STRING *string, void *userdata);
 typedef void *(*fnBobCallbackHdr)(PVOID *entry, UNICODE_STRING *string, void *userdata);
 
-BOB_STATIC void *bob_process_loader_enum(struct BobProc *process, fnBobCallbackLdr proc, void *userdata) {
+BOB_STATIC void *bob_process_loader_enum(BobProc *process, fnBobCallbackLdr proc, void *userdata) {
 	PEB peb;
 	PEB_LDR_DATA ldr;
 	if (!BOB_process_information(process, &peb)) {
@@ -60,7 +151,7 @@ BOB_STATIC void *bob_process_loader_enum(struct BobProc *process, fnBobCallbackL
 	return NULL;
 }
 
-BOB_STATIC void *bob_process_section_enum(struct BobProc *process, fnBobCallbackSct proc, void *userdata) {
+BOB_STATIC void *bob_process_section_enum(BobProc *process, fnBobCallbackSct proc, void *userdata) {
 	MEMORY_BASIC_INFORMATION information;
 
 	size_t total = 0;
@@ -116,7 +207,7 @@ BOB_STATIC void *bob_process_section_enum(struct BobProc *process, fnBobCallback
 	return NULL;
 }
 
-BOB_STATIC void *bob_process_header_enum(struct BobProc *process, fnBobCallbackHdr proc, void *userdata) {
+BOB_STATIC void *bob_process_header_enum(BobProc *process, fnBobCallbackHdr proc, void *userdata) {
 	MEMORY_BASIC_INFORMATION information;
 
 	size_t total = 0;
@@ -220,27 +311,32 @@ BOB_STATIC void *HdrMatchName(PVOID *entry, UNICODE_STRING *string, void *name) 
 	return STRCASEEQ(FullDllName, name) ? entry : NULL;
 }
 
-struct BobModule *BOB_module_open(struct BobProc *process, const char *name, int search) {
+BobModule *BOB_module_open(BobProc *process, const char *name, int search) {
+	char real[MAX_PATH];
+
+	// This works for Windows 10, we need to implement older windows versions!
+	BOB_module_api_set_namespace_10(process, real, name);
+
 	void *address = NULL;
 	do {
-		if ((search & SEARCH_LOADER) != 0 && (address = bob_process_loader_enum(process, LdrMatchName, name)) != NULL) {
+		if ((search & SEARCH_LOADER) != 0 && (address = bob_process_loader_enum(process, LdrMatchName, real)) != NULL) {
 			break;
 		}
-		if ((search & SEARCH_HEADER) != 0 && (address = bob_process_header_enum(process, HdrMatchName, name)) != NULL) {
+		if ((search & SEARCH_HEADER) != 0 && (address = bob_process_header_enum(process, HdrMatchName, real)) != NULL) {
 			break;
 		}
-		if ((search & SEARCH_SECTION) != 0 && (address = bob_process_section_enum(process, SctMatchName, name)) != NULL) {
+		if ((search & SEARCH_SECTION) != 0 && (address = bob_process_section_enum(process, SctMatchName, real)) != NULL) {
 			break;
 		}
 	} while (false);
 	return (BobModule *)address;
 }
 
-void BOB_module_close(struct BobModule *module) {
+void BOB_module_close(BobModule *module) {
 	(void)module;
 }
 
-void *BOB_module_export(struct BobProc *process, struct BobModule *module, const char *target) {
+void *BOB_module_export_ex(BobProc *process, BobModule *module, const char *target, char *r_dll, char *r_exp, int maxdepth) {
 	uint8_t raw[0xDAD];
 	if (!BOB_process_read(process, module, raw, sizeof(raw))) {
 		return NULL;
@@ -286,7 +382,9 @@ void *BOB_module_export(struct BobProc *process, struct BobModule *module, const
 		if ((uintptr_t)target <= 0xFFFF) {
 			WORD ord = (WORD)POINTER_AS_UINT(target);
 			if (ord >= exp->Base && (ord - exp->Base) < exp->NumberOfFunctions) {
-				address = POINTER_OFFSET(module, func[ord - exp->Base]);
+				if ((address = POINTER_OFFSET(module, func[ord - exp->Base]))) {
+					// break;
+				}
 			}
 		}
 
@@ -298,10 +396,12 @@ void *BOB_module_export(struct BobProc *process, struct BobModule *module, const
 			}
 
 			if (STREQLEN(data, target, 256)) {
-				address = POINTER_OFFSET(module, func[ordi[i]]);
+				if ((address = POINTER_OFFSET(module, func[ordi[i]]))) {
+					break;
+				}
 			}
 		}
-		
+
 		if (POINTER_OFFSET(module, image.VirtualAddress) <= address && address <= POINTER_OFFSET(module, image.VirtualAddress + image.Size)) {
 			do {
 				char forward[255];
@@ -311,20 +411,42 @@ void *BOB_module_export(struct BobProc *process, struct BobModule *module, const
 
 				address = NULL;
 
-				char dll[255];
-				char exp[255];
+				char dll[MAX_PATH];
+				char exp[MAX_PATH];
 
 				if (sscanf(forward, "%255[^.].%255s", dll, exp) > 0) {
-					char full[255];
-					snprintf(full, 255, "%s.dll", dll);
+					char full[MAX_PATH];
+					snprintf(full, sizeof(full), "%s.dll", dll);
 
-					BobModule *chain = BOB_module_open(process, full, SEARCH_ALL);
+					if (r_dll) {
+						strncpy(r_dll, dll, MAX_PATH);
+					}
+					if (r_exp) {
+						strncpy(r_exp, exp, MAX_PATH);
+					}
+
+					BobModule *chain = NULL;
+					
+					do {
+						if ((chain = BOB_module_open(process, dll, SEARCH_DEFAULT))) {
+							break;
+						}
+
+						if ((chain = BOB_module_open(process, full, SEARCH_DEFAULT))) {
+							break;
+						}
+					} while (false);
+
 					if (chain) {
 						if (exp[0] == '#') {
-							address = BOB_module_export(process, chain, atoi(exp + 1));
+							if ((address = BOB_module_export_ex(process, chain, atoi(exp + 1), r_dll, r_exp, maxdepth - 1))) {
+								break;
+							}
 						}
 						else {
-							address = BOB_module_export(process, chain, exp);
+							if ((address = BOB_module_export_ex(process, chain, exp, r_dll, r_exp, maxdepth - 1))) {
+								break;
+							}
 						}
 					}
 				}
@@ -335,6 +457,10 @@ void *BOB_module_export(struct BobProc *process, struct BobModule *module, const
 	}
 
 	return address;
+}
+
+void *BOB_module_export(BobProc *process, BobModule *module, const char *target) {
+	return BOB_module_export_ex(process, module, target, NULL, NULL, 16);
 }
 
 /** \} */

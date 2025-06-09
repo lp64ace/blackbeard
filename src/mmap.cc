@@ -291,7 +291,7 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_dependency_ex(ManualMa
 
 template<typename T = uintptr_t> BOB_STATIC BobModule *bob_mmap_dependency(ManualMap<T> *self, const char *name) {
 	BobModule *module = BOB_module_open(self->process, static_cast<const char *>(name), SEARCH_DEFAULT);
-	
+
 	if (!module) {
 		WCHAR wname[MAX_PATH] = {0};
 		WCHAR wpath[MAX_PATH] = {0};
@@ -306,6 +306,17 @@ template<typename T = uintptr_t> BOB_STATIC BobModule *bob_mmap_dependency(Manua
 	return module;
 }
 
+template<typename T = uintptr_t> BOB_STATIC void *bob_mmap_import(ManualMap<T> *self, const char *dll, const char *name) {
+	void *address = NULL;
+
+	char fwd_dll[MAX_PATH];
+	char fwd_exp[MAX_PATH];
+
+	// TODO?
+
+	return address;
+}
+
 template<typename T1 = uintptr_t, typename T2> BOB_INLINE bool bob_mmap_thunk_is_ordinal(ManualMap<T1> *self, const T2 *thunk) {
 	if (self->is64()) {
 		return thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG64 != 0;
@@ -316,7 +327,7 @@ template<typename T1 = uintptr_t, typename T2> BOB_INLINE bool bob_mmap_thunk_is
 	return false;
 }
 
-template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import(ManualMap<T> *self) {
+template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_imports(ManualMap<T> *self) {
 	const IMAGE_IMPORT_DESCRIPTOR *descriptor;
 	// Not the greatest way to do this, we load ALL the modules first and then we resolve imports!
 	if ((descriptor = static_cast<const IMAGE_IMPORT_DESCRIPTOR *>(bob_mmap_directory(self, self->source, IMAGE_DIRECTORY_ENTRY_IMPORT)))) {
@@ -351,8 +362,10 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import(ManualMap<T> *s
 					WORD ordinal = self->thunk->u1.Ordinal & 0xFFFF;
 
 					if (!(address = (FARPROC)BOB_module_export(self->process, module, reinterpret_cast<const char *>(ordinal)))) {
-						BOB_DEBUG_PRINT(stderr, XORSTR("[Error] Import dependency %hd from image %s not found!\n"), ordinal, dll);
-						return false;
+						if (!(address = (FARPROC)bob_mmap_import(self, dll, reinterpret_cast<const char *>(ordinal)))) {
+							BOB_DEBUG_PRINT(stderr, XORSTR("[Warning] Import dependency %hd from image %s not found!\n"), ordinal, dll);
+							// return false;
+						}
 					}
 					BOB_DEBUG_PRINT(stdout, XORSTR("[Info] Import 0x%p | ID | %s:%hd\n"), address, dll, ordinal);
 				}
@@ -360,8 +373,10 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import(ManualMap<T> *s
 					const IMAGE_IMPORT_BY_NAME *named = static_cast<const IMAGE_IMPORT_BY_NAME *>(bob_mmap_resolve_rva(self, self->thunk->u1.AddressOfData, self->source, ADDRESS_VA));
 
 					if (!(address = (FARPROC)BOB_module_export(self->process, module, reinterpret_cast<const char *>(named->Name)))) {
-						BOB_DEBUG_PRINT(stderr, XORSTR("[Error] Import dependency %s from image %s not found!\n"), named->Name, dll);
-						return false;
+						if (!(address = (FARPROC)bob_mmap_import(self, dll, reinterpret_cast<const char *>(named->Name)))) {
+							BOB_DEBUG_PRINT(stderr, XORSTR("[Warning] Import dependency %s from image %s not found!\n"), named->Name, dll);
+							// return false;
+						}
 					}
 					BOB_DEBUG_PRINT(stderr, XORSTR("[Info] Import 0x%p | FN | %s:%s\n"), address, dll, named->Name);
 				}
@@ -373,7 +388,7 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import(ManualMap<T> *s
 	return true;
 }
 
-template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import_delayed(ManualMap<T> *self) {
+template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_imports_delayed(ManualMap<T> *self) {
 	const IMAGE_DELAYLOAD_DESCRIPTOR *descriptor;
 	// Not the greatest way to do this, we load ALL the modules first and then we resolve imports!
 	if ((descriptor = static_cast<const IMAGE_DELAYLOAD_DESCRIPTOR *>(bob_mmap_directory(self, self->source, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT)))) {
@@ -401,8 +416,10 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import_delayed(ManualM
 					WORD ordinal = self->thunk->u1.Ordinal & 0xFFFF;
 
 					if (!(address = (FARPROC)BOB_module_export(self->process, module, reinterpret_cast<const char *>(ordinal)))) {
-						BOB_DEBUG_PRINT(stderr, XORSTR("[Error] Import dependency %hd from image %s not found!\n"), ordinal, dll);
-						return false;
+						if (!(address = (FARPROC)bob_mmap_import(self, dll, reinterpret_cast<const char *>(ordinal)))) {
+							BOB_DEBUG_PRINT(stderr, XORSTR("[Warning] Import dependency %hd from image %s not found!\n"), ordinal, dll);
+							// return false;
+						}
 					}
 					BOB_DEBUG_PRINT(stderr, XORSTR("[Info] DELAYED | Import 0x%p | ID | %s:%hd\n"), address, dll, ordinal);
 				}
@@ -410,8 +427,10 @@ template<typename T = uintptr_t> BOB_STATIC bool bob_mmap_import_delayed(ManualM
 					const IMAGE_IMPORT_BY_NAME *named = static_cast<const IMAGE_IMPORT_BY_NAME *>(bob_mmap_resolve_rva(self, self->thunk->u1.AddressOfData, self->source, ADDRESS_VA));
 
 					if (!(address = (FARPROC)BOB_module_export(self->process, module, reinterpret_cast<const char *>(named->Name)))) {
-						BOB_DEBUG_PRINT(stderr, XORSTR("[Error] Import dependency %s from image %s not found!\n"), named->Name, dll);
-						return false;
+						if (!(address = (FARPROC)bob_mmap_import(self, dll, reinterpret_cast<const char *>(named->Name)))) {
+							BOB_DEBUG_PRINT(stderr, XORSTR("[Warning] Import dependency %s from image %s not found!\n"), named->Name, dll);
+							// return false;
+						}
 					}
 					BOB_DEBUG_PRINT(stderr, XORSTR("[Info] DELAYED | Import 0x%p | FN | %s:%s\n"), address, dll, named->Name);
 				}
@@ -708,11 +727,11 @@ template<typename T = uintptr_t> BOB_STATIC BobModule *bob_mmap_impl(ManualMap<T
 		return NULL;
 	}
 
-	if (!bob_mmap_import(self)) {
+	if (!bob_mmap_imports(self)) {
 		return NULL;
 	}
 
-	if (!bob_mmap_import_delayed(self)) {
+	if (!bob_mmap_imports_delayed(self)) {
 		return NULL;
 	}
 
