@@ -392,13 +392,13 @@ public:
 		if (ASM.is64Bit()) {
 			void *SetEvent = BOB_module_export(this->process, kernel32, "SetEvent");
 			ASM.mov(asmjit::x86::rcx, asmjit::imm(this->evtremote));    // rcx = HANDLE
-			ASM.mov(asmjit::x86::rax, asmjit::imm(SetEvent));	    // rax = &SetEvent
+			ASM.mov(asmjit::x86::rax, asmjit::imm(SetEvent));			// rax = &SetEvent
 			ASM.call(asmjit::x86::rax);                                 // call SetEvent(rcx)
 		} else {
 			// On x86, SetEvent uses stdcall: push HANDLE, then call
 			void *SetEvent = BOB_module_export(this->process, kernel32, "SetEvent");
 			ASM.push(asmjit::imm(this->evtremote));                     // push HANDLE
-			ASM.mov(asmjit::x86::eax, asmjit::imm(SetEvent));	    // eax = &SetEvent
+			ASM.mov(asmjit::x86::eax, asmjit::imm(SetEvent));			// eax = &SetEvent
 			ASM.call(asmjit::x86::eax);                                 // call SetEvent
 		}
 	}
