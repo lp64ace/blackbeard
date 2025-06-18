@@ -33,3 +33,7 @@ Navigate to the build folder and run cmake
 cmake -G "Virtual Studio 17 2022" /path/to/src
 cmake --build . --config Release
 ```
+
+# Contribute
+
+There are several TODO tags all over the source code, the project also is in desperate need of proper testing suites for both x86_64 and x64 architectures that can both be simulated using llvm.
