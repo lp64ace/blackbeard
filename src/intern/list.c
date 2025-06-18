@@ -1,4 +1,5 @@
 #include "config.h"
+#include "native.h"
 #include "list.h"
 
 #include <string.h>
