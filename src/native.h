@@ -66,8 +66,8 @@ extern DWORD (*bobQueueUserAPC)(IN PAPCFUNC apc, IN HANDLE thread, IN ULONG_PTR 
 extern DWORD (*bobResumeThread)(IN HANDLE thread);
 extern DWORD (*bobSuspendThread)(IN HANDLE thread);
 extern BOOL (*bobTerminateThread)(IN HANDLE thread, IN DWORD exitcode);
-extern BOOL (*bobGetThreadContext)(IN HANDLE thread, IN OUT LPCONTEXT context);
-extern BOOL (*bobSetThreadContext)(IN HANDLE thread, IN LPCONTEXT context);
+// extern BOOL (*bobGetThreadContext)(IN HANDLE thread, IN OUT LPCONTEXT context);
+// extern BOOL (*bobSetThreadContext)(IN HANDLE thread, IN const CONTEXT *context);
 
 extern HANDLE (*bobCreateEventA)(IN LPSECURITY_ATTRIBUTES attributes OPTIONAL, IN BOOL manual, IN BOOL initial, IN LPCSTR name OPTIONAL);
 extern HANDLE (*bobCreateEventW)(IN LPSECURITY_ATTRIBUTES attributes OPTIONAL, IN BOOL manual, IN BOOL initial, IN LPCWSTR name OPTIONAL);

@@ -13,6 +13,13 @@
 
 #include <new>
 
+#ifndef min
+#	define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+#ifndef max
+#	define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
 /* -------------------------------------------------------------------- */
 /** \name Internal
  * \{ */
@@ -372,7 +379,7 @@ public:
 			ASM.mov(asmjit::x86::qword_ptr(asmjit::x86::rdx), asmjit::x86::rax);
 		}
 		else {
-			ASM.mov(asmjit::x86::edx, asmjit::imm(reinterpret_cast<uint32_t>(ret)));
+			ASM.mov(asmjit::x86::edx, asmjit::imm(reinterpret_cast<uint32_t>(POINTER_AS_UINT(ret))));
 			ASM.mov(asmjit::x86::dword_ptr(asmjit::x86::edx), asmjit::x86::eax);
 		}
 	}
@@ -385,13 +392,13 @@ public:
 		if (ASM.is64Bit()) {
 			void *SetEvent = BOB_module_export(this->process, kernel32, "SetEvent");
 			ASM.mov(asmjit::x86::rcx, asmjit::imm(this->evtremote));    // rcx = HANDLE
-			ASM.mov(asmjit::x86::rax, asmjit::imm((uint64_t)SetEvent)); // rax = &SetEvent
+			ASM.mov(asmjit::x86::rax, asmjit::imm(SetEvent));	    // rax = &SetEvent
 			ASM.call(asmjit::x86::rax);                                 // call SetEvent(rcx)
 		} else {
 			// On x86, SetEvent uses stdcall: push HANDLE, then call
 			void *SetEvent = BOB_module_export(this->process, kernel32, "SetEvent");
 			ASM.push(asmjit::imm(this->evtremote));                     // push HANDLE
-			ASM.mov(asmjit::x86::eax, asmjit::imm((uint32_t)SetEvent)); // eax = &SetEvent
+			ASM.mov(asmjit::x86::eax, asmjit::imm(SetEvent));	    // eax = &SetEvent
 			ASM.call(asmjit::x86::eax);                                 // call SetEvent
 		}
 	}

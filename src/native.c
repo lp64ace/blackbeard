@@ -59,8 +59,8 @@ DWORD (*bobQueueUserAPC)(IN PAPCFUNC apc, IN HANDLE thread, IN ULONG_PTR data) =
 DWORD (*bobResumeThread)(IN HANDLE thread) = ResumeThread;
 DWORD (*bobSuspendThread)(IN HANDLE thread) = SuspendThread;
 BOOL (*bobTerminateThread)(IN HANDLE thread, IN DWORD exitcode) = TerminateThread;
-BOOL (*bobGetThreadContext)(IN HANDLE thread, IN OUT LPCONTEXT context) = GetThreadContext;
-BOOL (*bobSetThreadContext)(IN HANDLE thread, IN LPCONTEXT context) = SetThreadContext;
+// BOOL (*bobGetThreadContext)(IN HANDLE thread, IN OUT LPCONTEXT context) = GetThreadContext;
+// BOOL (*bobSetThreadContext)(IN HANDLE thread, IN const CONTEXT *context) = SetThreadContext;
 
 HANDLE (*bobCreateEventA)(IN LPSECURITY_ATTRIBUTES attributes OPTIONAL, IN BOOL manual, IN BOOL initial, IN LPCSTR name OPTIONAL) = CreateEventA;
 HANDLE (*bobCreateEventW)(IN LPSECURITY_ATTRIBUTES attributes OPTIONAL, IN BOOL manual, IN BOOL initial, IN LPCWSTR name OPTIONAL) = CreateEventW;

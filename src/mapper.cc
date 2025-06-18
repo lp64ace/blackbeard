@@ -9,6 +9,14 @@
 
 #include <tchar.h>
 
+#ifndef min
+#	define min(a, b) (((a) < (b)) ? (a) : (b))
+#endif
+#ifndef max
+#	define max(a, b) (((a) > (b)) ? (a) : (b))
+#endif
+
+
 /* -------------------------------------------------------------------- */
 /** \name Internal
  * \{ */
@@ -328,7 +336,7 @@ public:
 			BOB_remote_push(this->worker, reinterpret_cast<uint64_t>(this->remote), NODEREF);
 			BOB_remote_push(this->worker, DLL_PROCESS_ATTACH, NODEREF);
 			BOB_remote_push(this->worker, 0, NODEREF);
-			BOB_remote_call(this->worker, static_cast<void *>(entry));
+			BOB_remote_call(this->worker, reinterpret_cast<void *>(entry));
 			BOB_remote_save(this->worker, 0);
 			// BOB_remote_breakpoint(this->worker);
 			BOB_remote_push(this->worker, 0, NODEREF);
@@ -630,10 +638,10 @@ template<typename T> BobModule *BobMapperImplementation<T>::find_dependency_modu
 
 template<typename T> BOOL BobMapperImplementation<T>::thunk_is_ordinal(BobMapperImplementation<T>::IMAGE_THUNK_DATA *thunk) {
 	if (this->is64()) {
-		return thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG64 != 0;
+		return (thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG64) != 0;
 	}
 	if (this->is32()) {
-		return thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG32 != 0;
+		return (thunk->u1.Ordinal & IMAGE_ORDINAL_FLAG32) != 0;
 	}
 	return false;
 }
