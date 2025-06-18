@@ -1,25 +1,7 @@
-#ifndef CONFIG_H
-#define CONFIG_H
+#ifndef __BOB_CONFIG_H__
+#define __BOB_CONFIG_H__
 
-#define BOB_DEBUG_MESSAGES 0
-
-#if BOB_DEBUG_MESSAGES
-#	include <stdio.h>
-#	define BOB_DEBUG_PRINT(...) fprintf(__VA_ARGS__)
-#else
-#	define BOB_DEBUG_PRINT(...) ((void)0)
-#endif
-
-
-#include <math.h>
-#include <stdarg.h>
 #include <string.h>
-
-#ifndef BOB_ALLOC
-#	include <malloc.h>
-#	define BOB_ALLOC(size) malloc(size)
-#	define BOB_FREE(ptr) free(ptr)
-#endif
 
 /* -------------------------------------------------------------------- */
 /** \name Pointer Macros
@@ -54,8 +36,8 @@
 
 /* generic strcmp macros */
 #if defined(_MSC_VER)
-#	define strcasecmp _stricmp
-#	define strncasecmp _strnicmp
+#define strcasecmp _stricmp
+#define strncasecmp _strnicmp
 #endif
 
 #define STREQ(a, b) (strcmp(a, b) == 0)
@@ -66,27 +48,5 @@
 #define STRPREFIX(a, b) (strncmp((a), (b), strlen(b)) == 0)
 
 /** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Inline Attributes
- * \{ */
-
-#if defined(_MSC_VER)
-#	define BOB_INLINE __forceinline
-#	define BOB_STATIC static
-#else
-#	define BOB_INLINE inline __attribute__((always_inline)) __attribute__((__unused__))
-#	define BOB_STATIC static
-#endif
-
-#if defined(_MSC_VER)
-#	define BOB_NOINLINE __declspec(noinline)
-#elif defined(__GNUC__)
-#	define BOB_NOINLINE __attribute__((noinline))
-#else
-#	define BOB_NOINLINE
-#endif
-
-/** /} */
 
 #endif

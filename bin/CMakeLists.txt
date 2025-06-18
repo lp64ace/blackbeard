@@ -3,8 +3,7 @@
 
 set(INC
 	# Internal Include Directories
-	PUBLIC .
-	PRIVATE ./intern
+	.
 	
 	# External Include Directories
 	
@@ -22,22 +21,7 @@ set(INC_SYS
 # Define Source Files
 
 set(SRC
-	mapper.cc
-	mapper.h
-	module.c
-	module.h
-	native.c
-	native.h
-	process.c
-	process.h
-	remote.cc
-	remote.h
-	thread.c
-	thread.h
-	
-	intern/config.h
-	intern/list.c
-	intern/list.h
+	example.c
 
 )
 
@@ -46,7 +30,7 @@ set(SRC
 
 set(LIB
 	# Internal Library Dependencies
-	PUBLIC asmjit
+	bob
 	
 	# External Library Dependencies
 	
@@ -55,7 +39,9 @@ set(LIB
 # -----------------------------------------------------------------------------
 # Declare Library
 
-add_library(bob ${SRC})
-target_include_directories(bob PUBLIC ${INC})
-# target_include_directories(bob SYSTEM ${INC_SYS})
-target_link_libraries(bob ${LIB})
+add_executable(example ${SRC})
+target_include_directories(example PUBLIC ${INC})
+# target_include_directories(example SYSTEM ${INC_SYS})
+target_link_libraries(example ${LIB})
+
+add_compile_definitions(SOURCE_DIR=L\"${CMAKE_CURRENT_SOURCE_DIR}\")

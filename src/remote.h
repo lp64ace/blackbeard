@@ -1,66 +1,58 @@
-#ifndef REMOTE_H
-#define REMOTE_H
+#ifndef __BOB_REMOTE_H__
+#define __BOB_REMOTE_H__
 
-#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
-
-/**
- * This is absolute fucking horseshit and needs to be cleaned the fuck up!
- * Oh the other hand this is one of the few fucking parts that actually work 
- * in this shit so keep it as is till we fix the rest!
- */
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-struct BobProc;
-struct BobModule;
+struct BobProcess;
+struct BobThread;
 
 /* -------------------------------------------------------------------- */
-/** \name Impl
+/** \name Implementations
  * \{ */
 
 typedef struct BobRemote BobRemote;
 
-enum {
-	REMOTE_NEW,
-	REMOTE_LEASTEXEC,
-	REMOTE_MOSTEXEC,
-};
+struct BobRemote *BOB_remote_open(struct BobProcess *process);
+
+/** The thread is destroyed and the memory released. */
+void BOB_remote_close(struct BobRemote *remote);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Remote Execution
+ * \{ */
 
 enum {
-	REMOTE_WIN64,
-	REMOTE_CDECL,
-	REMOTE_STDCALL,
-	REMOTE_FASTCALL,
-	REMOTE_THISCALL,
+	NODEREF = 0,
+	DEREFPTR,
+	DEREFIMM32,
+	DEREFIMM64,
 };
 
-struct BobRemote *BOB_remote_open(struct BobProc *process, bool x64);
+void BOB_remote_breakpoint(struct BobRemote *remote);
+void BOB_remote_push(struct BobRemote *remote, const uint64_t imm, int deref);
+void *BOB_remote_write(struct BobRemote *remote, const void *buffer, size_t length);
+void *BOB_remote_push_ex(struct BobRemote *remote, const void *buffer, size_t length);
+void *BOB_remote_push_ansi(struct BobRemote *remote, const char *ansi);
+void *BOB_remote_push_wide(struct BobRemote *remote, const wchar_t *wide);
 
-void *BOB_remote_write(struct BobRemote *remote, const void *data, size_t size);
-void *BOB_remote_push(struct BobRemote *remote, const void *data, size_t size);
-void BOB_remote_push_int(struct BobRemote *remote, int arg);
-void BOB_remote_push_ptr(struct BobRemote *remote, const void *arg);
-void *BOB_remote_push_str(struct BobRemote *remote, const char *arg);
-void *BOB_remote_push_wstr(struct BobRemote *remote, const wchar_t *arg);
-void BOB_remote_push_ref(struct BobRemote *remote, const void *arg);
-void BOB_remote_push_ref4(struct BobRemote *remote, const void *arg);
-void BOB_remote_push_ref8(struct BobRemote *remote, const void *arg);
+void BOB_remote_begin64(struct BobRemote *remote);
+void BOB_remote_call(struct BobRemote *remote, const void *procedure);
+void BOB_remote_fastcall(struct BobRemote *remote, const void *procedure);
+void BOB_remote_thiscall(struct BobRemote *remote, const void *procedure);
+void BOB_remote_save(struct BobRemote *remote, size_t index);
+void BOB_remote_end64(struct BobRemote *remote);
 
 void BOB_remote_notify(struct BobRemote *remote);
-void BOB_remote_begin_call64(struct BobRemote *remote);
-void BOB_remote_call(struct BobRemote *remote, int convention, const void *proc);
-void BOB_remote_end_call64(struct BobRemote *remote);
-void BOB_remote_exit(struct BobRemote *remote);
 
-void BOB_remote_save(struct BobRemote *remote, int idx);
-
-uint64_t BOB_remote_exec(struct BobRemote *remote, void *arg);
-
-void BOB_remote_close(struct BobRemote *remote);
+uint64_t BOB_remote_invoke(struct BobRemote *remote, void *argument);
 
 /** \} */
 
@@ -68,9 +60,9 @@ void BOB_remote_close(struct BobRemote *remote);
 /** \name Queries
  * \{ */
 
-uint64_t BOB_remote_saved(struct BobRemote *remote, int idx);
+uint64_t BOB_remote_saved(const struct BobRemote *remote, size_t index);
 
-int BOB_remote_thread_index(struct BobRemote *remote);
+struct BobThread *BOB_remote_thread(const struct BobRemote *remote);
 
 /** \} */
 

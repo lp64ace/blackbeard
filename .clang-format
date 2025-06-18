@@ -1,0 +1,19 @@
+# Format Style Options - Created with Clang Power Tools
+---
+BasedOnStyle: LLVM
+AccessModifierOffset: -4
+AlignAfterOpenBracket: DontAlign
+AlignEscapedNewlines: Left
+AllowAllArgumentsOnNextLine: false
+AllowShortFunctionsOnASingleLine: None
+BreakStringLiterals: false
+ColumnLimit: 210
+IndentCaseLabels: true
+IndentWidth: 4
+ObjCBlockIndentWidth: 4
+ReflowComments: false
+SortIncludes: false
+SpaceAfterTemplateKeyword: false
+TabWidth: 4
+UseTab: ForIndentation
+...

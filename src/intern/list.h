@@ -1,9 +1,10 @@
-#ifndef LIST_H
-#define LIST_H
-
-#include "config.h"
+#ifndef __BOB_LIST_H__
+#define __BOB_LIST_H__
 
 #include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <stdlib.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -220,12 +221,12 @@ void *LIB_rfindbytes(const ListBase *lb, const void *bytes, const size_t length,
 size_t LIB_listbase_count(const ListBase *listbase);
 
 /** Checks if a ListBase is empty. */
-BOB_INLINE bool LIB_listbase_is_empty(const ListBase *listbase);
+inline bool LIB_listbase_is_empty(const ListBase *listbase);
 /** Checks if a ListBase contains exactly one Link. */
-BOB_INLINE bool LIB_listbase_is_single(const ListBase *listbase);
+inline bool LIB_listbase_is_single(const ListBase *listbase);
 
 /** Clears all Links from a ListBase, resetting it to an empty state. */
-BOB_INLINE void LIB_listbase_clear(ListBase *listbase);
+inline void LIB_listbase_clear(ListBase *listbase);
 
 /** \} */
 
@@ -233,15 +234,15 @@ BOB_INLINE void LIB_listbase_clear(ListBase *listbase);
 }
 #endif
 
-BOB_INLINE bool LIB_listbase_is_empty(const ListBase *listbase) {
+inline bool LIB_listbase_is_empty(const ListBase *listbase) {
 	return (listbase->first == NULL && listbase->first == listbase->last);
 }
 
-BOB_INLINE bool LIB_listbase_is_single(const ListBase *listbase) {
+inline bool LIB_listbase_is_single(const ListBase *listbase) {
 	return (listbase->first && listbase->first == listbase->last);
 }
 
-BOB_INLINE void LIB_listbase_clear(ListBase *listbase) {
+inline void LIB_listbase_clear(ListBase *listbase) {
 	listbase->first = listbase->last = NULL;
 }
 

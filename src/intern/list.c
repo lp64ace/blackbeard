@@ -1,3 +1,4 @@
+#include "config.h"
 #include "list.h"
 
 #include <string.h>
@@ -7,7 +8,7 @@
  * \{ */
 
 LinkData *LIB_generic_nodeN(void *data) {
-	LinkData *link = BOB_ALLOC(sizeof(LinkData));
+	LinkData *link = (LinkData *)bobAlloc(sizeof(LinkData));
 	if (link) {
 		link->data = data;
 	}
@@ -197,7 +198,7 @@ void LIB_freelistN(ListBase *listbase) {
 	link = (Link *)listbase->first;
 	while (link) {
 		next = link->next;
-		BOB_FREE(link);
+		bobFree(link);
 		link = next;
 	}
 
@@ -209,7 +210,7 @@ void LIB_freelinkN(ListBase *lb, void *vlink) {
 
 	if (link) {
 		LIB_remlink(lb, link);
-		BOB_FREE(link);
+		bobFree(link);
 	}
 }
 

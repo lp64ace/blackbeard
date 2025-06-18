@@ -1,51 +1,47 @@
-#ifndef THREAD_H
-#define THREAD_H
-
-#include "proc.h"
-
-#include <stddef.h>
-#include <stdbool.h>
-#include <stdint.h>
+#ifndef __BOB_THREAD_H__
+#define __BOB_THREAD_H__
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef struct BobThread BobThread;
+struct BobProcess;
 
 /* -------------------------------------------------------------------- */
-/** \name Procedure Native
+/** \name Implementation
  * \{ */
 
-BobThread *BOB_thread_open_ex(int id);
+typedef struct BobThread BobThread;
 
-BobThread *BOB_thread_open_parasite(BobProc *process);
-BobThread *BOB_thread_open_most_executed(BobProc *process);
-BobThread *BOB_thread_open_least_executed(BobProc *process);
+enum {
+	THREAD_MAIN,
+	THREAD_MOST,
+	THREAD_LEAST,
+};
 
-BobThread *BOB_thread_new(BobProc *process, void *entry, void *arg);
-
-bool BOB_thread_suspend(BobThread *thread);
-bool BOB_thread_resume(BobThread *thread);
-bool BOB_thread_terminate(BobThread *thread);
-bool BOB_thread_join(BobThread *thread);
-bool BOB_thread_close(BobThread *thread);
-
-int BOB_thread_code(BobThread *thread);
-
-/** Take controll of the remote thread and execute usercode! */
-bool BOB_thread_execute(BobThread *thread, void *entry);
-
+struct BobThread *BOB_thread_open(int identifier);
+struct BobThread *BOB_thread_open_by_process(struct BobProcess *process, int type);
+struct BobThread *BOB_thread_new(struct BobProcess *process, void *procedure, void *argument);
+ 
+void BOB_thread_close(struct BobThread *thread);
+ 
 /** \} */
 
 /* -------------------------------------------------------------------- */
-/** \name Queries
+/** \name Queries/Updates
  * \{ */
 
-int BOB_thread_id(BobThread *thread);
+bool BOB_thread_suspend(struct BobThread *thread);
+bool BOB_thread_resume(struct BobThread *thread);
+bool BOB_thread_join(struct BobThread *thread);
+bool BOB_thread_terminate(struct BobThread *thread, int code);
 
-double BOB_thread_time_kernel(const BobThread *thread);
-double BOB_thread_time_user(const BobThread *thread);
+int BOB_thread_exit_code(struct BobThread *thread);
+int BOB_thread_identifier(struct BobThread *thread);
+
+double BOB_thread_time_kernel(struct BobThread *thread);
+double BOB_thread_time_user(struct BobThread *thread);
+double BOB_thread_time_all(struct BobThread *thread);
 
 /** \} */
 

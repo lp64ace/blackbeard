@@ -1,6 +1,6 @@
 <div align="center">
 	<p align="center">
-		<img src="img/logo.png" alt="Bob" width="128"/>
+		<img src="logo.png" alt="Bob" width="128"/>
 	</p>
 </div>
 
@@ -19,10 +19,6 @@ Bob *builds* a remote thread and attaches a triggerable loop that can execute AP
 * Exceptions, TLS, and security cookies are initialized.
 * DllMain is invoked.
 
-# Issues
-
-There are currently minor known issues with path resolving for schema DLL modules like `ms-api-` and `ms-exec-`, basically SxS needs to be rebuilt!
-
 # Build
 
 Download the repository through github or git!
@@ -37,9 +33,3 @@ Navigate to the build folder and run cmake
 cmake -G "Virtual Studio 17 2022" /path/to/src
 cmake --build . --config Release
 ```
-
-# Notes
-
-Even though C/C++ functions are not exported to the remote process XORSTR is used to hide literals from the binary because this library is sometimes used internally and functions are called from within the protable executable that is mapped.
-
-
