@@ -21,9 +21,9 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 # -----------------------------------------------------------------------------
 # Extra Compile Flags
 
-# Select C++17 as the standard for C++ projects.
+# Select C++20 as the standard for C++ projects.
 set(CMAKE_CXX_STANDARD 20)
-# If C++17 is not available, downgrading to an earlier standard is NOT OK.
+# If C++20 is not available, downgrading to an earlier standard is NOT OK.
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Do not enable compiler specific language extensions.
 set(CMAKE_CXX_EXTENSIONS OFF)
