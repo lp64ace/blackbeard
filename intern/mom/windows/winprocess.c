@@ -16,7 +16,7 @@ LPVOID winmom_process_peb(const ProcessHandle *handle, PEB *peb) {
 	PROCESS_BASIC_INFORMATION information;
 
 	HMODULE ntdll = LoadLibrary(_T("ntdll.dll"));
-	fnNtQueryInformationProcess _NtQueryInformationProcess = GetProcAddress(ntdll, "NtQueryInformationProcess");
+	fnNtQueryInformationProcess _NtQueryInformationProcess = (fnNtQueryInformationProcess)GetProcAddress(ntdll, "NtQueryInformationProcess");
 	if (!NT_SUCCESS(_NtQueryInformationProcess(winmom_process_handle(handle), ProcessBasicInformation, &information, sizeof(information), NULL))) {
 		return false;
 	}
@@ -45,7 +45,7 @@ ProcessHandle *winmom_process_open(int identifier) {
 	return (ProcessHandle *)OpenProcess(0xFFFF, FALSE, identifier);
 }
 
-ProcessHandle *winmom_process_self() {
+ProcessHandle *winmom_process_self(void) {
 	return winmom_process_open(GetCurrentProcessId());
 }
 

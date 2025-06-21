@@ -210,7 +210,7 @@ static size_t winmom_module_native_directory_size(const ModuleHandle *handle, in
 			return NT64(handle)->OptionalHeader.DataDirectory[directory].Size;
 		} break;
 	}
-	return NULL;
+	return 0;
 }
 
 static DWORD winmom_module_native_directory_address(const ModuleHandle *handle, int directory) {
@@ -219,7 +219,7 @@ static DWORD winmom_module_native_directory_address(const ModuleHandle *handle, 
 			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			if (!nt->OptionalHeader.DataDirectory[directory].Size) {
-				return NULL;
+				return 0;
 			}
 
 			return nt->OptionalHeader.DataDirectory[directory].VirtualAddress;
@@ -228,13 +228,13 @@ static DWORD winmom_module_native_directory_address(const ModuleHandle *handle, 
 			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			if (!nt->OptionalHeader.DataDirectory[directory].Size) {
-				return NULL;
+				return 0;
 			}
 
 			return nt->OptionalHeader.DataDirectory[directory].VirtualAddress;
 		} break;
 	}
-	return NULL;
+	return 0;
 }
 
 static void *winmom_module_native_relative_directory(const ModuleHandle *handle, int directory) {
@@ -292,7 +292,7 @@ eMomArchitecture winmom_module_architecture(const ModuleHandle *handle) {
 	return kMomArchitectureNone;
 }
 
-const char *winmom_module_open_by_file_from_disk(const char *fullpath) {
+static ModuleHandle *winmom_module_open_by_file_from_disk(const char *fullpath) {
 	ModuleHandle *handle = NULL;
 
 	HANDLE fpin = CreateFile(fullpath, GENERIC_READ, FILE_SHARE_READ, 0, OPEN_EXISTING, 0, 0);
@@ -481,12 +481,12 @@ static inline void *winmom_module_loaded_match_name(ProcessHandle *process, LDR_
 	for (size_t offset = 0; offset < MaxLength && FullDllName[offset]; offset++) {
 		if (FullDllName[offset] == L'\\' || FullDllName[offset] == L'/') {
 			if (_stricmp(POINTER_OFFSET(FullDllName, offset + 1), name) == 0) {
-				return MOM_module_open_by_address(process, entry->DllBase, entry->Reserved3[1]);
+				return MOM_module_open_by_address(process, entry->DllBase, (size_t)entry->Reserved3[1]);
 			}
 		}
 	}
 
-	return _stricmp(FullDllName, name) == 0 ? MOM_module_open_by_address(process, entry->DllBase, entry->Reserved3[1]) : NULL;
+	return _stricmp(FullDllName, name) == 0 ? MOM_module_open_by_address(process, entry->DllBase, (size_t)entry->Reserved3[1]) : NULL;
 }
 
 ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *name) {
@@ -584,7 +584,7 @@ void *winmom_module_address(ModuleHandle *handle) {
 	return (void *)handle->real;
 }
 
-size_t winmom_module_size(ModuleHandle *handle) {
+size_t winmom_module_size(const ModuleHandle *handle) {
 	uintptr_t lo = 0x7FFFFFFFFFFFFFFF;
 	uintptr_t hi = 0x0000000000000000;
 	for (IMAGE_SECTION_HEADER *section = winmom_module_native_section_begin(handle); section != winmom_module_native_section_end(handle); section++) {
@@ -609,8 +609,8 @@ ModuleSection *winmom_module_section_begin(ModuleHandle *handle) {
 				}
 			}
 			new->prev = last;
-			new->src = winmom_module_resolve_relative_address(handle, header->VirtualAddress);
-			new->dst = winmom_module_resolve_virtual_address(handle, header->VirtualAddress);
+			new->src = (uintptr_t)winmom_module_resolve_relative_address(handle, header->VirtualAddress);
+			new->dst = (uintptr_t)winmom_module_resolve_virtual_address(handle, header->VirtualAddress);
 			memcpy(new->header, header, sizeof(IMAGE_SECTION_HEADER));
 
 			if (!handle->sections) {
@@ -660,7 +660,7 @@ void *winmom_module_section_memory(const ModuleHandle *handle, ModuleSection *se
 
 size_t winmom_module_section_size(const ModuleHandle *handle, const ModuleSection *section) {
 	if (!section) {
-		return NULL;
+		return 0;
 	}
 
 	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->header;
@@ -699,8 +699,8 @@ ModuleExport *winmom_module_export_begin(ModuleHandle *handle) {
 					}
 				}
 				else {
-					new->src = winmom_module_resolve_relative_address(handle, func[index]);
-					new->dst = winmom_module_resolve_virtual_address(handle, func[index]);
+					new->src = (uintptr_t)winmom_module_resolve_relative_address(handle, func[index]);
+					new->dst = (uintptr_t)winmom_module_resolve_virtual_address(handle, func[index]);
 				}
 
 				for (DWORD nindex = 0; nindex < directory->NumberOfNames; nindex++) {
