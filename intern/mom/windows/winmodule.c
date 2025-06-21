@@ -353,12 +353,14 @@ static ModuleHandle *winmom_module_open_by_file_from_name(const char *name) {
 	return handle;
 }
 
+typedef ModuleHandle *(*fnMomCallbackSchema)(const char *resolved, void *userdata);
+
 /**
  * schemanames are absolutely nuts here are some name layouts;
  *  - [EXT-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
  *  - [API-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
  */
-static ModuleHandle *winmom_module_open_by_file_from_schema(const char *schemaname) {
+static ModuleHandle *winmom_module_open_by_file_from_schema(const char *schemaname, fnMomCallbackSchema proc, void *userdata) {
 	ModuleHandle *handle = NULL, *last = NULL;
 	ProcessHandle *self = MOM_process_self();
 
@@ -392,7 +394,7 @@ static ModuleHandle *winmom_module_open_by_file_from_schema(const char *schemana
 								WideCharToMultiByte(CP_ACP, 0, wphysical, -1, physical, ARRAYSIZE(physical), 0, NULL);
 
 								ModuleHandle *new = NULL;
-								if ((new = winmom_module_open_by_file_from_name(physical))) {
+								if ((new = proc(physical, userdata))) {
 									if (last) {
 										last->next = new;
 									}
@@ -413,10 +415,14 @@ static ModuleHandle *winmom_module_open_by_file_from_schema(const char *schemana
 	return handle;
 }
 
+static inline void *winmom_module_open_by_file_schema(const char *resolved, void *userdata) {
+	return winmom_module_open_by_file_from_name(resolved);
+}
+
 ModuleHandle *winmom_module_open_by_file(const char *filename) {
 	ModuleHandle *handle = NULL;
 
-	if ((handle = winmom_module_open_by_file_from_schema(filename))) {
+	if ((handle = winmom_module_open_by_file_from_schema(filename, winmom_module_open_by_file_schema, NULL))) {
 		return handle;
 	}
 	if ((handle = winmom_module_open_by_file_from_name(filename))) {
@@ -489,11 +495,20 @@ static inline void *winmom_module_loaded_match_name(ProcessHandle *process, LDR_
 	return _stricmp(FullDllName, name) == 0 ? MOM_module_open_by_address(process, entry->DllBase, (size_t)entry->Reserved3[1]) : NULL;
 }
 
+static inline void *winmom_module_open_by_name_schema(const char *resolved, void *userdata) {
+	return winmom_module_enum(userdata, winmom_module_loaded_match_name, (void *)resolved);
+}
+
 ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *name) {
 	ModuleHandle *handle = NULL;
+
+	if ((handle = winmom_module_open_by_file_from_schema(name, winmom_module_open_by_name_schema, process))) {
+		return handle;
+	}
 	if ((handle = winmom_module_enum(process, winmom_module_loaded_match_name, (void *)name))) {
 		return handle;
 	}
+
 	return NULL;
 }
 
