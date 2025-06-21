@@ -12,7 +12,7 @@ namespace {
 #	define TEST_MODULE_FILE NULL
 #endif
 
-TEST(Mom, DiskSections) {
+TEST(MomDisk, Sections) {
 	ModuleHandle *kernel32 = MOM_module_open_by_file(TEST_MODULE_FILE);
 	ASSERT_NE(kernel32, nullptr);
 	for (ModuleSection *section = MOM_module_section_begin(kernel32); section != MOM_module_section_end(kernel32); section = MOM_module_section_next(kernel32, section)) {
@@ -26,7 +26,7 @@ TEST(Mom, DiskSections) {
 	MOM_module_close(kernel32);
 }
 
-TEST(Mom, DiskExports) {
+TEST(MomDisk, Exports) {
 	ModuleHandle *kernel32 = MOM_module_open_by_file(TEST_MODULE_FILE);
 	ASSERT_NE(kernel32, nullptr);
 	for (ModuleExport *exported = MOM_module_export_begin(kernel32); exported != MOM_module_export_end(kernel32); exported = MOM_module_export_next(kernel32, exported)) {
@@ -43,7 +43,7 @@ TEST(Mom, DiskExports) {
 	MOM_module_close(kernel32);
 }
 
-TEST(Mom, DiskImports) {
+TEST(MomDisk, Imports) {
 	ModuleHandle *kernel32 = MOM_module_open_by_file(TEST_MODULE_FILE);
 	ASSERT_NE(kernel32, nullptr);
 	for (ModuleImport *imported = MOM_module_import_begin(kernel32); imported != MOM_module_import_end(kernel32); imported = MOM_module_import_next(kernel32, imported)) {
@@ -67,7 +67,7 @@ TEST(Mom, DiskImports) {
 	MOM_module_close(kernel32);
 }
 
-TEST(Mom, DiskDelayedImports) {
+TEST(MomDisk, DelayedImports) {
 	ModuleHandle *kernel32 = MOM_module_open_by_file(TEST_MODULE_FILE);
 	ASSERT_NE(kernel32, nullptr);
 	for (ModuleImport *imported = MOM_module_import_delayed_begin(kernel32); imported != MOM_module_import_delayed_end(kernel32); imported = MOM_module_import_delayed_next(kernel32, imported)) {

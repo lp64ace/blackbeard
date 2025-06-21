@@ -16,7 +16,7 @@ namespace {
 #	define TEST_MODULE_NAME NULL
 #endif
 
-TEST(Mom, LocalSections) {
+TEST(MomLocal, Sections) {
 	ProcessHandle *self = MOM_process_self();
 	do {
 		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
@@ -34,7 +34,7 @@ TEST(Mom, LocalSections) {
 	MOM_process_close(self);
 }
 
-TEST(Mom, LocalExports) {
+TEST(MomLocal, Exports) {
 	ProcessHandle *self = MOM_process_self();
 	do {
 		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
@@ -55,7 +55,7 @@ TEST(Mom, LocalExports) {
 	MOM_process_close(self);
 }
 
-TEST(Mom, LocalImports) {
+TEST(MomLocal, Imports) {
 	ProcessHandle *self = MOM_process_self();
 	do {
 		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
@@ -83,7 +83,7 @@ TEST(Mom, LocalImports) {
 	MOM_process_close(self);
 }
 
-TEST(Mom, LocalDelayedImports) {
+TEST(MomLocal, DelayedImports) {
 	ProcessHandle *self = MOM_process_self();
 	do {
 		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
@@ -118,7 +118,7 @@ TEST(Mom, LocalDelayedImports) {
  * We strive to replace platform specific functionality, we ought to test against it!
  */
 
-TEST(Mom, LocalExportsWindows) {
+TEST(MomLocal, ExportsWindows) {
 	ProcessHandle *self = MOM_process_self();
 	do {
 		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
