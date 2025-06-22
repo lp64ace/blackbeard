@@ -88,6 +88,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # -----------------------------------------------------------------------------
 # Add Sub-Directories
 
+add_subdirectory(tools)
 add_subdirectory(extern)
 add_subdirectory(intern)
 add_subdirectory(source)

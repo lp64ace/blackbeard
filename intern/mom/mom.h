@@ -35,6 +35,7 @@ extern "C" {
 #endif
 
 // This might prove to be extremelly small, extremelly soon!
+#define MOM_MAX_DLLNAME_LEN 256
 #define MOM_MAX_EXPNAME_LEN 256
 #define MOM_MAX_LIBNAME_LEN 256
 
@@ -45,6 +46,8 @@ extern "C" {
 typedef struct ModuleHandle ModuleHandle;
 typedef struct ModuleSection ModuleSection;
 typedef struct ModuleExport ModuleExport;
+typedef struct ModuleImport ModuleImport;
+typedef struct ModuleTLS ModuleTLS;
 typedef struct ProcessHandle ProcessHandle;
 
 typedef enum eMomArchitecture {
@@ -53,11 +56,23 @@ typedef enum eMomArchitecture {
 	kMomArchitectureAmd64,
 } eMomArchitecture;
 
+typedef enum eMomRelocationType {
+	kMomRelocationNone,
+	kMomRelocationHigh,    // *(uint16_t **)address += HIWORD(delta);
+	kMomRelocationLow,     // *(uint16_t **)address += LOWORD(delta);
+	kMomRelocationHighLow, // *(uintptr_t **)address += delta;
+	kMomRelocationDir64,   // *(uint64_t **)address += delta;
+	kMomRelocationAbsolute,
+	kMomRelocationHighAdj,
+} eMomRelocationType;
+
 typedef struct ModuleHandle *(*fnMOM_module_open_by_file)(const char *filepath);
 typedef struct ModuleHandle *(*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
 typedef struct ModuleHandle *(*fnMOM_module_open_by_image)(const void *image, size_t length);
 typedef struct ModuleHandle *(*fnMOM_module_open_by_address)(struct ProcessHandle *process, const void *address, size_t length);
+typedef struct ModuleHandle *(*fnMOM_module_prev)(struct ModuleHandle *handle);
 typedef struct ModuleHandle *(*fnMOM_module_next)(struct ModuleHandle *handle);
+typedef const char *(*fnMOM_module_name)(struct ModuleHandle *handle);
 typedef void (*fnMOM_module_close)(struct ModuleHandle *handle);
 typedef void *(*fnMOM_module_address)(struct ModuleHandle *handle);
 typedef size_t (*fnMOM_module_image_size)(const struct ModuleHandle *handle);
@@ -67,6 +82,7 @@ typedef struct ModuleSection *(*fnMOM_module_section_begin)(struct ModuleHandle 
 typedef struct ModuleSection *(*fnMOM_module_section_end)(struct ModuleHandle *handle);
 typedef struct ModuleSection *(*fnMOM_module_section_next)(struct ModuleHandle *handle, struct ModuleSection *itr);
 typedef const char *(*fnMOM_module_section_name)(const struct ModuleHandle *handle, const struct ModuleSection *section);
+typedef int (*fnMOM_module_section_protect)(const struct ModuleHandle *handle, const struct ModuleSection *section);
 typedef void *(*fnMOM_module_section_disk)(const struct ModuleHandle *handle, struct ModuleSection *section);
 // Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
 typedef void *(*fnMOM_module_section_memory)(const struct ModuleHandle *handle, struct ModuleSection *section);
@@ -98,11 +114,43 @@ typedef const char *(*fnMOM_module_import_lib)(const struct ModuleHandle *handle
 typedef struct ModuleImport *(*fnMOM_module_import_delayed_begin)(struct ModuleHandle *handle);
 typedef struct ModuleImport *(*fnMOM_module_import_delayed_end)(struct ModuleHandle *handle);
 typedef struct ModuleImport *(*fnMOM_module_import_delayed_next)(struct ModuleHandle *handle, struct ModuleImport *itr);
+typedef struct ModuleTLS *(*fnMOM_module_tls_begin)(struct ModuleHandle *handle);
+typedef struct ModuleTLS *(*fnMOM_module_tls_end)(struct ModuleHandle *handle);
+typedef struct ModuleTLS *(*fnMOM_module_tls_next)(struct ModuleHandle *handle, struct ModuleTLS *itr);
+typedef void *(*fnMOM_module_tls_disk)(const struct ModuleHandle *handle, struct ModuleTLS *tls);
+// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
+typedef void *(*fnMOM_module_tls_memory)(const struct ModuleHandle *handle, struct ModuleTLS *tls);
+typedef struct ModuleRelocation *(*fnMOM_module_relocation_begin)(struct ModuleHandle *handle);
+typedef struct ModuleRelocation *(*fnMOM_module_relocation_end)(struct ModuleHandle *handle);
+typedef struct ModuleRelocation *(*fnMOM_module_relocation_next)(struct ModuleHandle *handle, struct ModuleRelocation *itr);
+typedef void *(*fnMOM_module_relocation_disk)(const struct ModuleHandle *handle, struct ModuleRelocation *relocation);
+// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
+typedef void *(*fnMOM_module_relocation_memory)(const struct ModuleHandle *handle, struct ModuleRelocation *relocation);
+typedef eMomRelocationType (*fnMOM_module_relocation_type)(const struct ModuleHandle *handle, const struct ModuleRelocation *relocation);
+
+typedef enum eMomMemoryProtect {
+	kMomProtectNone = 0,
+	kMomProtectRead = (1 << 0),
+	kMomProtectWrite = (1 << 1),
+	kMomProtectExec = (1 << 2),
+} eMomMemoryProtect;
 
 typedef struct ProcessHandle *(*fnMOM_process_open)(int identifier);
 typedef struct ProcessHandle *(*fnMOM_process_self)(void);
+typedef void *(*fnMOM_process_allocate)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
+typedef bool (*fnMOM_process_protect)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
+typedef size_t (*fnMOM_process_write)(struct ProcessHandle *handle, void *address, const void *buffer, size_t size);
+typedef size_t (*fnMOM_process_read)(struct ProcessHandle *handle, const void *address, void *buffer, size_t size);
+typedef void (*fnMOM_process_free)(struct ProcessHandle *handle, void *address);
 typedef void (*fnMOM_process_close)(struct ProcessHandle *handle);
 typedef int (*fnMOM_process_identifier)(const struct ProcessHandle *handle);
+
+// This is the list of all known loaded modules inside a process!
+typedef ModuleHandle *(*fnMOM_process_module_push)(struct ProcessHandle *process, const ModuleHandle *handle);
+typedef ModuleHandle *(*fnMOM_process_module_find)(struct ProcessHandle *process, const ModuleHandle *handle);
+typedef ModuleHandle *(*fnMOM_process_module_begin)(struct ProcessHandle *process);
+typedef ModuleHandle *(*fnMOM_process_module_end)(struct ProcessHandle *process);
+typedef ModuleHandle *(*fnMOM_process_module_next)(struct ProcessHandle *process, struct ModuleHandle *itr);
 
 /** \} */
 
@@ -114,7 +162,9 @@ extern fnMOM_module_open_by_file MOM_module_open_by_file;
 extern fnMOM_module_open_by_name MOM_module_open_by_name;
 extern fnMOM_module_open_by_image MOM_module_open_by_image;
 extern fnMOM_module_open_by_address MOM_module_open_by_address;
+extern fnMOM_module_prev MOM_module_prev;
 extern fnMOM_module_next MOM_module_next;
+extern fnMOM_module_name MOM_module_name;
 extern fnMOM_module_close MOM_module_close;
 extern fnMOM_module_address MOM_module_address;
 extern fnMOM_module_image_size MOM_module_image_size;
@@ -124,6 +174,7 @@ extern fnMOM_module_section_begin MOM_module_section_begin;
 extern fnMOM_module_section_end MOM_module_section_end;
 extern fnMOM_module_section_next MOM_module_section_next;
 extern fnMOM_module_section_name MOM_module_section_name;
+extern fnMOM_module_section_protect MOM_module_section_protect;
 extern fnMOM_module_section_disk MOM_module_section_disk;
 extern fnMOM_module_section_memory MOM_module_section_memory;
 extern fnMOM_module_section_size MOM_module_section_size;
@@ -152,6 +203,17 @@ extern fnMOM_module_import_lib MOM_module_import_lib;
 extern fnMOM_module_import_delayed_begin MOM_module_import_delayed_begin;
 extern fnMOM_module_import_delayed_end MOM_module_import_delayed_end;
 extern fnMOM_module_import_delayed_next MOM_module_import_delayed_next;
+extern fnMOM_module_tls_begin MOM_module_tls_begin;
+extern fnMOM_module_tls_end MOM_module_tls_end;
+extern fnMOM_module_tls_next MOM_module_tls_next;
+extern fnMOM_module_tls_disk MOM_module_tls_disk;
+extern fnMOM_module_tls_memory MOM_module_tls_memory;
+extern fnMOM_module_relocation_begin MOM_module_relocation_begin;
+extern fnMOM_module_relocation_end MOM_module_relocation_end;
+extern fnMOM_module_relocation_next MOM_module_relocation_next;
+extern fnMOM_module_relocation_disk MOM_module_relocation_disk;
+extern fnMOM_module_relocation_memory MOM_module_relocation_memory;
+extern fnMOM_module_relocation_type MOM_module_relocation_type;
 
 /** \} */
 
@@ -161,8 +223,19 @@ extern fnMOM_module_import_delayed_next MOM_module_import_delayed_next;
 
 extern fnMOM_process_open MOM_process_open;
 extern fnMOM_process_self MOM_process_self;
+extern fnMOM_process_allocate MOM_process_allocate;
+extern fnMOM_process_protect MOM_process_protect;
+extern fnMOM_process_write MOM_process_write;
+extern fnMOM_process_read MOM_process_read;
+extern fnMOM_process_free MOM_process_free;
 extern fnMOM_process_close MOM_process_close;
 extern fnMOM_process_identifier MOM_process_identifier;
+
+extern fnMOM_process_module_push MOM_process_module_push;
+extern fnMOM_process_module_find MOM_process_module_find;
+extern fnMOM_process_module_begin MOM_process_module_begin;
+extern fnMOM_process_module_end MOM_process_module_end;
+extern fnMOM_process_module_next MOM_process_module_next;
 
 /** \} */
 

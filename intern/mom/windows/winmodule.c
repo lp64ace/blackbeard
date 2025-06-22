@@ -250,18 +250,20 @@ static void *winmom_module_native_directory(const ModuleHandle *handle, int dire
 	void *itr;
 
 	DWORD address = winmom_module_native_directory_address(handle, directory);
-	if ((itr = winmom_module_native_relative_directory(handle, directory))) {
+	if (address) {
 		buffer = MEM_callocN(winmom_module_native_directory_size(handle, directory), "module-directory");
+	}
+
+	if ((itr = winmom_module_native_relative_directory(handle, directory))) {
 		memcpy(buffer, itr, winmom_module_native_directory_size(handle, directory));
 	}
 	if ((itr = winmom_module_native_virtual_directory(handle, directory))) {
-		buffer = MEM_callocN(winmom_module_native_directory_size(handle, directory), "module-directory");
 		do {
 			if (!handle->process) {
 				memcpy(buffer, itr, winmom_module_native_directory_size(handle, directory));
 				break;
 			}
-			if (!winmom_process_read(handle->process, itr, buffer, winmom_module_native_directory_size(handle, directory))) {
+			if (!MOM_process_read(handle->process, itr, buffer, winmom_module_native_directory_size(handle, directory))) {
 				memcpy(buffer, itr, winmom_module_native_directory_size(handle, directory));
 				break;
 			}
@@ -332,6 +334,10 @@ static ModuleHandle *winmom_module_open_by_file_from_disk(const char *fullpath) 
 
 		handle = MOM_module_open_by_image(image, total);
 
+		if (handle) {
+			strncpy(handle->dllname, fullpath, strnlen(fullpath, MOM_MAX_DLLNAME_LEN));
+		}
+
 		MEM_SAFE_FREE(image);
 	}
 
@@ -360,7 +366,7 @@ typedef ModuleHandle *(*fnMomCallbackSchema)(const char *resolved, void *userdat
  *  - [EXT-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
  *  - [API-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
  */
-static ModuleHandle *winmom_module_open_by_file_from_schema(const char *schemaname, fnMomCallbackSchema proc, void *userdata) {
+static ModuleHandle *winmom_module_open_by_schema(const char *schemaname, fnMomCallbackSchema proc, void *userdata) {
 	ModuleHandle *handle = NULL, *last = NULL;
 	ProcessHandle *self = MOM_process_self();
 
@@ -422,7 +428,7 @@ static inline void *winmom_module_open_by_file_schema(const char *resolved, void
 ModuleHandle *winmom_module_open_by_file(const char *filename) {
 	ModuleHandle *handle = NULL;
 
-	if ((handle = winmom_module_open_by_file_from_schema(filename, winmom_module_open_by_file_schema, NULL))) {
+	if ((handle = winmom_module_open_by_schema(filename, winmom_module_open_by_file_schema, NULL))) {
 		return handle;
 	}
 	if ((handle = winmom_module_open_by_file_from_name(filename))) {
@@ -435,86 +441,25 @@ ModuleHandle *winmom_module_open_by_file(const char *filename) {
 	return handle;
 }
 
-typedef void *(*fnMomCallbackLdr)(ProcessHandle *process, LDR_DATA_TABLE_ENTRY *entry, void *userdata);
-
-static inline void *winmom_module_enum(ProcessHandle *process, fnMomCallbackLdr proc, void *userdata) {
-	PEB peb;
-	PEB_LDR_DATA ldr;
-	if (!winmom_process_peb(process, &peb)) {
-		return NULL;
-	}
-	/**
-	 * PEB::Ldr already points to a pointer, even through it is not named pLdr!
-	 *
-	 * https://www.geoffchappell.com/studies/windows/km/ntoskrnl/inc/api/pebteb/peb/index.htm?tx=179
-	 */
-	if (!winmom_process_read(process, peb.Ldr, &ldr, sizeof(PEB_LDR_DATA))) {
-		return NULL;
+static inline bool winmom_module_loaded_match_name(ProcessHandle *process, const char *full, void *name) {
+	if (!name) {
+		return false;
 	}
 
-	size_t total = 0;
-
-	LIST_ENTRY *head = POINTER_OFFSET(peb.Ldr, FIELD_OFFSET(PEB_LDR_DATA, InMemoryOrderModuleList));
-	for (LIST_ENTRY link = ldr.InMemoryOrderModuleList; link.Flink != head; winmom_process_read(process, link.Flink, &link, sizeof(link))) {
-		LDR_DATA_TABLE_ENTRY local;
-
-		LDR_DATA_TABLE_ENTRY *remote = CONTAINING_RECORD(link.Flink, LDR_DATA_TABLE_ENTRY, InMemoryOrderLinks);
-		if (!(BOOL)winmom_process_read(process, remote, &local, sizeof(local))) {
-			continue;
-		}
-
-		uint8_t raw[0xBAD];
-		if (!(BOOL)winmom_process_read(process, local.FullDllName.Buffer, raw, local.FullDllName.MaximumLength)) {
-			continue;
-		}
-		local.FullDllName.Buffer = (PWSTR)raw;
-
-		void *ret = NULL;
-		if ((ret = proc(process, &local, userdata)) != NULL) {
-			return ret;
-		}
-
-		total++;
-	}
-
-	return NULL;
-}
-
-static inline void *winmom_module_loaded_match_name(ProcessHandle *process, LDR_DATA_TABLE_ENTRY *entry, void *name) {
-	CHAR FullDllName[MAX_PATH * 4];
-	int MaxLength = WideCharToMultiByte(CP_ACP, 0, entry->FullDllName.Buffer, entry->FullDllName.MaximumLength, FullDllName, ARRAYSIZE(FullDllName), 0, NULL);
-
-	for (size_t offset = 0; offset < MaxLength && FullDllName[offset]; offset++) {
-		if (FullDllName[offset] == L'\\' || FullDllName[offset] == L'/') {
-			if (_stricmp(POINTER_OFFSET(FullDllName, offset + 1), name) == 0) {
-				return MOM_module_open_by_address(process, entry->DllBase, (size_t)entry->Reserved3[1]);
+	for (size_t offset = 0; full[offset]; offset++) {
+		if (full[offset] == L'\\' || full[offset] == L'/') {
+			if (_stricmp(POINTER_OFFSET(full, offset + 1), name) == 0) {
+				return true;
 			}
 		}
 	}
 
-	return _stricmp(FullDllName, name) == 0 ? MOM_module_open_by_address(process, entry->DllBase, (size_t)entry->Reserved3[1]) : NULL;
-}
-
-static inline void *winmom_module_open_by_name_schema(const char *resolved, void *userdata) {
-	return winmom_module_enum(userdata, winmom_module_loaded_match_name, (void *)resolved);
-}
-
-ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *name) {
-	ModuleHandle *handle = NULL;
-
-	if ((handle = winmom_module_open_by_file_from_schema(name, winmom_module_open_by_name_schema, process))) {
-		return handle;
-	}
-	if ((handle = winmom_module_enum(process, winmom_module_loaded_match_name, (void *)name))) {
-		return handle;
-	}
-
-	return NULL;
+	return _stricmp(full, name) == 0;
 }
 
 ModuleHandle *winmom_module_open_by_image(const void *image, size_t length) {
 	ModuleHandle *handle = MEM_callocN(sizeof(ModuleHandle) + length, "module");
-	
+
 	handle->disk = (uintptr_t)handle->image;
 	memcpy(handle->image, image, length);
 
@@ -540,9 +485,8 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 	handle->real = (uintptr_t)address;
 	handle->process = process;
 	if (process) {
-		winmom_process_read(handle->process, address, handle->image, length);
-	}
-	else {
+		MOM_process_read(handle->process, address, handle->image, length);
+	} else {
 		memcpy(handle->image, address, length);
 	}
 
@@ -562,6 +506,52 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 	return handle;
 }
 
+static inline void *winmom_module_open_by_name_schema(const char *resolved, void *userdata) {
+	ProcessHandle *process = (ProcessHandle *)userdata;
+
+	for (ModuleHandle *itr = MOM_process_module_begin(process); itr != MOM_process_module_end(process); itr = MOM_process_module_next(process, itr)) {
+		if (winmom_module_loaded_match_name(process, MOM_module_name(itr), resolved)) {
+			if (itr->disk) {
+				return winmom_module_open_by_image(itr->image, MOM_module_memory_size(itr));
+			}
+			if (itr->real) {
+				return winmom_module_open_by_address(process, (const void *)itr->real, MOM_module_memory_size(itr));
+			}
+		}
+	}
+}
+
+ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *name) {
+	ModuleHandle *handle = NULL;
+
+	if ((handle = winmom_module_open_by_schema(name, winmom_module_open_by_name_schema, process))) {
+		return handle;
+	}
+
+	for (ModuleHandle *itr = MOM_process_module_begin(process); itr != MOM_process_module_end(process); itr = MOM_process_module_next(process, itr)) {
+		if (!MOM_module_name(itr)) {
+			continue;
+		}
+
+		if (winmom_module_loaded_match_name(process, MOM_module_name(itr), name)) {
+			if (itr->real) {
+				if ((handle = winmom_module_open_by_address(process, (const void *)itr->real, MOM_module_memory_size(itr)))) {
+					memcpy(handle->dllname, itr->dllname, sizeof(handle->dllname));
+					return handle;
+				}
+			}
+			if (itr->disk) {
+				if ((handle = winmom_module_open_by_image(itr->image, MOM_module_memory_size(itr)))) {
+					memcpy(handle->dllname, itr->dllname, sizeof(handle->dllname));
+					return handle;
+				}
+			}
+		}
+	}
+
+	return handle;
+}
+
 void winmom_module_close(ModuleHandle *handle) {
 	ModuleHandle *prev = handle->prev, *next = handle->next;
 
@@ -576,6 +566,12 @@ void winmom_module_close(ModuleHandle *handle) {
 	}
 	LIST_FOREACH_MUTABLE(ModuleImport *, import, handle->delayed_imports) {
 		MEM_SAFE_FREE(import);
+	}
+	LIST_FOREACH_MUTABLE(ModuleTLS *, tls, handle->tls) {
+		MEM_SAFE_FREE(tls);
+	}
+	LIST_FOREACH_MUTABLE(ModuleRelocation *, relocation, handle->relocations) {
+		MEM_SAFE_FREE(relocation);
 	}
 
 	if (handle->next) {
@@ -606,7 +602,8 @@ size_t winmom_module_size(const ModuleHandle *handle) {
 		lo = (lo < section->VirtualAddress) ? lo : section->VirtualAddress;
 		hi = (hi > section->VirtualAddress + section->Misc.VirtualSize) ? hi : section->VirtualAddress + section->Misc.VirtualSize;
 	}
-	return (hi - lo);
+	// Why not hi - lo? Because this is the memory in the sections! the virtual address starts from the headers (zero)!
+	return (hi - 0x0000000000000000);
 }
 
 ModuleSection *winmom_module_section_begin(ModuleHandle *handle) {
@@ -619,7 +616,7 @@ ModuleSection *winmom_module_section_begin(ModuleHandle *handle) {
 		for (IMAGE_SECTION_HEADER *itr = winmom_module_native_section_begin(handle); itr != winmom_module_native_section_end(handle); itr++) {
 			header = itr;
 			if (handle->process) {
-				if (winmom_process_read(handle->process, itr, &buffer, sizeof(buffer))) {
+				if (MOM_process_read(handle->process, itr, &buffer, sizeof(buffer))) {
 					header = &buffer;
 				}
 			}
@@ -655,6 +652,26 @@ const char *winmom_module_section_name(const ModuleHandle *handle, const ModuleS
 
 	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->header;
 	return header->Name;
+}
+
+int winmom_module_section_protect(const ModuleHandle *handle, const ModuleSection *section) {
+	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->header;
+
+	if (header->Characteristics & (IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_EXECUTE)) {
+		int protection = 0;
+		if ((header->Characteristics & IMAGE_SCN_MEM_READ) != 0) {
+			protection |= kMomProtectRead;
+		}
+		if ((header->Characteristics & IMAGE_SCN_MEM_WRITE) != 0) {
+			protection |= kMomProtectWrite;
+		}
+		if ((header->Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0) {
+			protection |= kMomProtectExec;
+		}
+		return protection;
+	}
+	
+	return 0;
 }
 
 void *winmom_module_section_disk(const ModuleHandle *handle, ModuleSection *section) {
@@ -722,7 +739,7 @@ ModuleExport *winmom_module_export_begin(ModuleHandle *handle) {
 					if (ordi[nindex] == index) {
 						do {
 							if (handle->process) {
-								if (winmom_process_read(handle->process, winmom_module_resolve_virtual_address(handle, name[nindex]), new->expname, ARRAYSIZE(new->expname))) {
+								if (MOM_process_read(handle->process, winmom_module_resolve_virtual_address(handle, name[nindex]), new->expname, ARRAYSIZE(new->expname))) {
 									break;
 								}
 							}
@@ -810,7 +827,7 @@ static void winmom_module_import_make(ModuleHandle *handle, ModuleImport *import
 
 		do {
 			if (handle->process) {
-				if (winmom_process_read(handle->process, winmom_module_resolve_virtual_address(handle, address), image, MOM_MAX_EXPNAME_LEN)) {
+				if (MOM_process_read(handle->process, winmom_module_resolve_virtual_address(handle, address), image, MOM_MAX_EXPNAME_LEN)) {
 					continue;
 				}
 			}
@@ -833,12 +850,12 @@ ModuleImport *winmom_module_import_begin(ModuleHandle *handle) {
 		IMAGE_IMPORT_DESCRIPTOR *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_IMPORT);
 		DWORD address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_IMPORT);
 
-		for (IMAGE_IMPORT_DESCRIPTOR *desc = directory; desc->Name != 0; desc++) {
+		for (IMAGE_IMPORT_DESCRIPTOR *desc = directory; desc && desc->Name != 0; desc++) {
 			char libname[MOM_MAX_LIBNAME_LEN];
 
 			do {
 				if (handle->process) {
-					if (winmom_process_read(handle->process, winmom_module_resolve_virtual_address(handle, desc->Name), libname, ARRAYSIZE(libname))) {
+					if (MOM_process_read(handle->process, winmom_module_resolve_virtual_address(handle, desc->Name), libname, ARRAYSIZE(libname))) {
 						break;
 					}
 				}
@@ -897,8 +914,8 @@ ModuleImport *winmom_module_import_begin(ModuleHandle *handle) {
 				new->prev = last;
 				winmom_module_import_make(handle, new, thunk, funk, libname);
 
-				new->src = desc->OriginalFirstThunk + expindex * MOM_module_architecture_pointer_size(architecture); // VA
-				new->dst = desc->FirstThunk + expindex * MOM_module_architecture_pointer_size(architecture); // VA
+				new->from = desc->OriginalFirstThunk + expindex * MOM_module_architecture_pointer_size(architecture); // VA
+				new->to = desc->FirstThunk + expindex * MOM_module_architecture_pointer_size(architecture); // VA
 
 				if (!handle->imports) {
 					handle->imports = last = new;
@@ -924,19 +941,19 @@ ModuleImport *winmom_module_import_begin(ModuleHandle *handle) {
 }
 
 void *winmom_module_import_from_disk(const ModuleHandle *handle, const ModuleImport *import) {
-	return winmom_module_resolve_relative_address(handle, import->src);
+	return winmom_module_resolve_relative_address(handle, import->from);
 }
 
 void *winmom_module_import_to_disk(const ModuleHandle *handle, const ModuleImport *import) {
-	return winmom_module_resolve_relative_address(handle, import->dst);
+	return winmom_module_resolve_relative_address(handle, import->to);
 }
 
 void *winmom_module_import_from_memory(const ModuleHandle *handle, const ModuleImport *import) {
-	return winmom_module_resolve_virtual_address(handle, import->src);
+	return winmom_module_resolve_virtual_address(handle, import->from);
 }
 
 void *winmom_module_import_to_memory(const ModuleHandle *handle, const ModuleImport *import) {
-	return winmom_module_resolve_virtual_address(handle, import->dst);
+	return winmom_module_resolve_virtual_address(handle, import->to);
 }
 
 ModuleImport *winmom_module_import_delayed_begin(ModuleHandle *handle) {
@@ -946,12 +963,12 @@ ModuleImport *winmom_module_import_delayed_begin(ModuleHandle *handle) {
 		IMAGE_DELAYLOAD_DESCRIPTOR *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);
 		DWORD address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);
 
-		for (IMAGE_DELAYLOAD_DESCRIPTOR *desc = directory; desc->DllNameRVA != 0; desc++) {
+		for (IMAGE_DELAYLOAD_DESCRIPTOR *desc = directory; desc && desc->DllNameRVA != 0; desc++) {
 			char libname[MOM_MAX_LIBNAME_LEN];
 
 			do {
 				if (handle->process) {
-					if (winmom_process_read(handle->process, winmom_module_resolve_virtual_address(handle, desc->DllNameRVA), libname, ARRAYSIZE(libname))) {
+					if (MOM_process_read(handle->process, winmom_module_resolve_virtual_address(handle, desc->DllNameRVA), libname, ARRAYSIZE(libname))) {
 						break;
 					}
 				}
@@ -1005,8 +1022,8 @@ ModuleImport *winmom_module_import_delayed_begin(ModuleHandle *handle) {
 				new->prev = last;
 				winmom_module_import_make(handle, new, thunk, funk, libname);
 
-				new->src = desc->ImportNameTableRVA + expindex *MOM_module_architecture_pointer_size(architecture);	 // VA
-				new->dst = desc->ImportAddressTableRVA + expindex *MOM_module_architecture_pointer_size(architecture);	// VA
+				new->from = desc->ImportNameTableRVA + expindex *MOM_module_architecture_pointer_size(architecture);	 // VA
+				new->to = desc->ImportAddressTableRVA + expindex *MOM_module_architecture_pointer_size(architecture);	// VA
 
 				if (!handle->delayed_imports) {
 					handle->delayed_imports = last = new;
@@ -1031,6 +1048,171 @@ ModuleImport *winmom_module_import_delayed_begin(ModuleHandle *handle) {
 	return handle->delayed_imports;
 }
 
+ModuleTLS *winmom_module_tls_begin(ModuleHandle *handle) {
+	if (!handle->tls) {
+		ModuleTLS *new = MEM_callocN(sizeof(ModuleTLS), "tls"), *last = NULL;
+
+		void *vdirectory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+		void *address = NULL;
+		switch (MOM_module_architecture(handle)) {
+			case kMomArchitectureAmd32: {
+				IMAGE_TLS_DIRECTORY32 *directory = (IMAGE_TLS_DIRECTORY32 *)vdirectory;
+
+				address = directory->AddressOfCallBacks;
+			} break;
+			case kMomArchitectureAmd64: {
+				IMAGE_TLS_DIRECTORY64 *directory = (IMAGE_TLS_DIRECTORY64 *)vdirectory;
+
+				address = directory->AddressOfCallBacks;
+			} break;
+		}
+
+		PIMAGE_TLS_CALLBACK buffer[64];
+		PIMAGE_TLS_CALLBACK *callbacks = address;
+
+		if (handle->process) {
+			if (MOM_process_read(handle->process, address, buffer, sizeof(buffer))) {
+				callbacks = buffer;
+			}
+		}
+
+		if (callbacks) {
+			if (!handle->tls) {
+				if (handle->disk) {
+					for (size_t index = 0; index < ARRAYSIZE(buffer) && callbacks[index]; index++) {
+						new->prev = last;
+						new->src = callbacks[index];
+
+						if (!handle->tls) {
+							handle->tls = last = new;
+						}
+						last = new;
+						last->next = new = MEM_callocN(sizeof(ModuleTLS), "tls");
+					}
+				}
+			}
+			if (!handle->tls) {
+				if (handle->real) {
+					for (size_t index = 0; index < ARRAYSIZE(buffer) && callbacks[index]; index++) {
+						new->prev = last;
+						new->dst = callbacks[index];
+
+						if (!handle->tls) {
+							handle->tls = last = new;
+						}
+						last = new;
+						last->next = new = MEM_callocN(sizeof(ModuleTLS), "tls");
+					}
+				}
+			}
+		}
+
+		if (last) {
+			last->next = NULL;
+		}
+
+		MEM_SAFE_FREE(new);
+		MEM_SAFE_FREE(vdirectory);
+	}
+
+	return handle->tls;
+}
+
+void *winmom_module_tls_disk(const ModuleHandle *handle, ModuleTLS *tls) {
+	// I don't really like this since when loading from memory we are never able to resolve from disk!
+	return (tls->src) ? winmom_module_resolve_relative_address(handle, tls->src) : NULL;
+}
+
+void *winmom_module_tls_memory(const ModuleHandle *handle, ModuleTLS *tls) {
+	if (tls->src) {
+		return winmom_module_resolve_virtual_address(handle, tls->src);
+	}
+	return (void *)tls->dst;
+}
+
+
+#ifndef IMR_RELTYPE
+#	define IMR_RELTYPE(x) ((x >> 12) & 0xF)
+#endif
+
+#ifndef IMR_RELOFFSET
+#	define IMR_RELOFFSET(x) (x & 0xFFF)
+#endif
+
+ModuleRelocation *winmom_module_relocation_begin(ModuleHandle *handle) {
+	if (!handle->relocations) {
+		ModuleRelocation *new = MEM_callocN(sizeof(ModuleRelocation), "relocation"), *last = NULL;
+
+		IMAGE_BASE_RELOCATION *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_BASERELOC);
+		void *address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_BASERELOC);
+
+		IMAGE_BASE_RELOCATION *itr = directory;
+		while (itr < POINTER_OFFSET(directory, winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_BASERELOC))) {
+			DWORD va = itr->VirtualAddress;
+			DWORD nrelocations = (itr->SizeOfBlock - 8) / sizeof(WORD);
+			PWORD data = POINTER_OFFSET(itr, sizeof(IMAGE_BASE_RELOCATION));
+
+			while (nrelocations--) {
+				new->prev = last;
+				switch (IMR_RELTYPE(*data)) {
+					case IMAGE_REL_BASED_HIGH: {
+						new->type = kMomRelocationHigh;
+					} break;
+					case IMAGE_REL_BASED_LOW: {
+						new->type = kMomRelocationLow;
+					} break;
+					case IMAGE_REL_BASED_HIGHLOW: {
+						new->type = kMomRelocationHighLow;
+					} break;
+					case IMAGE_REL_BASED_DIR64: {
+						new->type = kMomRelocationDir64;
+					} break;
+					case IMAGE_REL_BASED_ABSOLUTE: {
+						new->type = kMomRelocationAbsolute;
+					} break;
+					case IMAGE_REL_BASED_HIGHADJ: {
+						new->type = kMomRelocationHighAdj;
+					} break;
+				}
+				new->src = va + IMR_RELOFFSET(*data);
+				new->dst = va + IMR_RELOFFSET(*data);
+
+				if (!handle->relocations) {
+					handle->relocations = last = new;
+				}
+				last = new;
+				last->next = new = MEM_callocN(sizeof(ModuleRelocation), "relocation");
+
+				data++;
+			}
+
+			itr = POINTER_OFFSET(itr, itr->SizeOfBlock);
+		}
+
+		if (last) {
+			last->next = NULL;
+		}
+
+		MEM_SAFE_FREE(new);
+		MEM_SAFE_FREE(directory);
+	}
+
+	return handle->relocations;
+}
+
+void *winmom_module_relocation_disk(const ModuleHandle *handle, ModuleRelocation *relocation) {
+	return winmom_module_resolve_relative_address(handle, relocation->src);
+}
+
+void *winmom_module_relocation_memory(const ModuleHandle *handle, ModuleRelocation *relocation) {
+	return winmom_module_resolve_virtual_address(handle, relocation->dst);
+}
+
+eMomRelocationType winmom_module_relocation_type(const ModuleHandle *handle, const ModuleRelocation *relocation){
+	return relocation->type;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -1048,6 +1230,7 @@ fnMOM_module_memory_size MOM_module_memory_size = winmom_module_size;
 fnMOM_module_architecture MOM_module_architecture = winmom_module_architecture;
 fnMOM_module_section_begin MOM_module_section_begin = winmom_module_section_begin;
 fnMOM_module_section_name MOM_module_section_name = winmom_module_section_name;
+fnMOM_module_section_protect MOM_module_section_protect = winmom_module_section_protect;
 fnMOM_module_section_disk MOM_module_section_disk = winmom_module_section_disk;
 fnMOM_module_section_memory MOM_module_section_memory = winmom_module_section_memory;
 fnMOM_module_section_size MOM_module_section_size = winmom_module_section_size;
@@ -1062,6 +1245,13 @@ fnMOM_module_import_to_disk MOM_module_import_to_disk = winmom_module_import_to_
 fnMOM_module_import_from_memory MOM_module_import_from_memory = winmom_module_import_from_memory;
 fnMOM_module_import_to_memory MOM_module_import_to_memory = winmom_module_import_to_memory;
 fnMOM_module_import_begin MOM_module_import_delayed_begin = winmom_module_import_delayed_begin;
+fnMOM_module_tls_begin MOM_module_tls_begin = winmom_module_tls_begin;
+fnMOM_module_tls_disk MOM_module_tls_disk = winmom_module_tls_disk;
+fnMOM_module_tls_memory MOM_module_tls_memory = winmom_module_tls_memory;
+fnMOM_module_relocation_begin MOM_module_relocation_begin = winmom_module_relocation_begin;
+fnMOM_module_relocation_disk MOM_module_relocation_disk = winmom_module_relocation_disk;
+fnMOM_module_relocation_memory MOM_module_relocation_memory = winmom_module_relocation_memory;
+fnMOM_module_relocation_type MOM_module_relocation_type = winmom_module_relocation_type;
 
 fnMOM_module_header_is_valid MOM_module_header_is_valid = winmom_module_header_is_valid;
 

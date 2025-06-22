@@ -1,4 +1,4 @@
 # -----------------------------------------------------------------------------
 # Add Sub-Directories
 
-add_subdirectory(bob)
+add_subdirectory(testdll1)

@@ -71,6 +71,13 @@ extern "C" {
 /** \name Datablock Definitions
  * { */
 
+typedef struct ProcessHandle {
+	struct ModuleHandle *modules;
+
+	// Native handle, this should probably be added into a private section?
+	uintptr_t native;
+} ProcessHandle;
+
 /*
  * Module sections usualy consist of a header and some raw data.
  * The data is just plain bullshit located in a blob within the file.
@@ -101,15 +108,6 @@ typedef struct ModuleSection {
 	char header[];
 } ModuleSection;
 
-typedef struct ModuleImport {
-	struct ModuleImport *prev, *next;
-	uintptr_t ordinal;
-	char expname[MOM_MAX_EXPNAME_LEN];
-	char libname[MOM_MAX_LIBNAME_LEN];
-	uintptr_t src;
-	uintptr_t dst;
-} ModuleImport;
-
 typedef struct ModuleExport {
 	struct ModuleExport *prev, *next;
 	uintptr_t ordinal;
@@ -121,17 +119,52 @@ typedef struct ModuleExport {
 	uintptr_t dst;
 } ModuleExport;
 
+typedef struct ModuleImport {
+	struct ModuleImport *prev, *next;
+	uintptr_t ordinal;
+	char expname[MOM_MAX_EXPNAME_LEN];
+	char libname[MOM_MAX_LIBNAME_LEN];
+	uintptr_t from;
+	uintptr_t to;
+} ModuleImport;
+
+typedef struct ModuleTLS {
+	struct ModuleTLS *prev, *next;
+
+	uintptr_t src;
+	uintptr_t dst;
+} ModuleTLS;
+
+typedef struct ModuleException {
+	struct ModuleException *prev, *next;
+
+	uintptr_t src;
+	uintptr_t dst;
+} ModuleException;
+
+typedef struct ModuleRelocation {
+	struct ModuleRelocation *prev, *next;
+
+	uintptr_t src;
+	uintptr_t dst;
+	eMomRelocationType type;
+} ModuleRelocation;
+
 typedef struct ModuleHandle {
 	struct ModuleHandle *prev, *next;
 	uintptr_t disk;
 	uintptr_t base;
 	uintptr_t real;
+	char dllname[MOM_MAX_DLLNAME_LEN];
 	
 	ProcessHandle *process;
 	ModuleSection *sections;
 	ModuleExport *exports;
 	ModuleImport *imports;
 	ModuleImport *delayed_imports;
+	ModuleTLS *tls;
+	ModuleException *exceptions;
+	ModuleRelocation *relocations;
 	
 	/**
 	 * The following can be used however the native implementation deems appropriate!

@@ -47,8 +47,16 @@ size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture) {
 /** \name Module
  * { */
 
+ModuleHandle *mom_module_prev(ModuleHandle *handle) {
+	return handle->next;
+}
+
 ModuleHandle *mom_module_next(ModuleHandle *handle) {
 	return handle->next;
+}
+
+const char *mom_module_name(ModuleHandle *handle) {
+	return (handle->dllname[0]) ? handle->dllname : NULL;
 }
 
 ModuleSection *mom_module_section_end(ModuleHandle *handle) {
@@ -115,13 +123,43 @@ ModuleImport *mom_module_import_delayed_next(ModuleHandle *handle, ModuleImport 
 	return (import) ? import->next : import;
 }
 
+ModuleTLS *mom_module_tls_end(ModuleHandle *handle) {
+	return NULL;
+}
+
+ModuleTLS *mom_module_tls_next(ModuleHandle *handle, ModuleTLS *tls) {
+	return (tls) ? tls->next : tls;
+}
+
+ModuleRelocation *mom_module_relocation_end(ModuleHandle *handle) {
+	return NULL;
+}
+
+ModuleRelocation *mom_module_relocation_next(ModuleHandle *handle, ModuleRelocation *itr) {
+	return (itr) ? itr->next : itr;
+}
+
+ModuleHandle *winmom_process_module_begin(ProcessHandle *handle) {
+	return handle->modules;
+}
+
+ModuleHandle *winmom_process_module_end(ProcessHandle *handle) {
+	return NULL;
+}
+
+ModuleHandle *winmom_process_module_next(ProcessHandle *handle, ModuleHandle *itr) {
+	return (itr) ? itr->next : itr;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Exports
  * { */
 
+fnMOM_module_next MOM_module_prev = mom_module_prev;
 fnMOM_module_next MOM_module_next = mom_module_next;
+fnMOM_module_name MOM_module_name = mom_module_name;
 fnMOM_module_section_end MOM_module_section_end = mom_module_section_end;
 fnMOM_module_section_next MOM_module_section_next = mom_module_section_next;
 fnMOM_module_export_end MOM_module_export_end = mom_module_export_end;
@@ -138,5 +176,13 @@ fnMOM_module_import_name MOM_module_import_name = mom_module_import_name;
 fnMOM_module_import_lib MOM_module_import_lib = mom_module_import_lib;
 fnMOM_module_import_delayed_end MOM_module_import_delayed_end = mom_module_import_delayed_end;
 fnMOM_module_import_delayed_next MOM_module_import_delayed_next = mom_module_import_delayed_next;
+fnMOM_module_tls_end MOM_module_tls_end = mom_module_tls_end;
+fnMOM_module_tls_next MOM_module_tls_next = mom_module_tls_next;
+fnMOM_module_relocation_end MOM_module_relocation_end = mom_module_relocation_end;
+fnMOM_module_relocation_next MOM_module_relocation_next = mom_module_relocation_next;
+
+fnMOM_process_module_begin MOM_process_module_begin = winmom_process_module_begin;
+fnMOM_process_module_end MOM_process_module_end = winmom_process_module_end;
+fnMOM_process_module_next MOM_process_module_next = winmom_process_module_next;
 
 /** \} */

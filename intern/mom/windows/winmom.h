@@ -69,7 +69,6 @@ HMODULE winmom_module_handle(const struct ModuleHandle *handle);
 
 HANDLE winmom_process_handle(const struct ProcessHandle *handle);
 LPVOID winmom_process_peb(const struct ProcessHandle *handle, PEB *peb);
-DWORD winmom_process_read(const struct ProcessHandle *handle, const void *address, void *buffer, size_t length);
 
 /** \} */
 
