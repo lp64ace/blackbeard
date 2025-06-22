@@ -33,7 +33,9 @@ set(SRC
 
 set(LIB
 	# Internal Library Dependencies
+	PUBLIC bob::extern::asmjit
 	PUBLIC bob::intern::guardedalloc
+	PUBLIC bob::intern::utils
 	PUBLIC bob::intern::mom
 	
 	# External Library Dependencies

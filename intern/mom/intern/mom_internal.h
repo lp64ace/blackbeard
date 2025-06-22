@@ -25,6 +25,8 @@
  * SOFTWARE.
  */
 
+#include "defines.h"
+#include "list.h"
 #include "mom.h"
 
 #ifdef __cplusplus
@@ -32,47 +34,11 @@ extern "C" {
 #endif
 
 /* -------------------------------------------------------------------- */
-/** \name Array Macros
- * \{ */
-
-#define ARRAY_HAS_ITEM(arr_item, arr_start, arr_len) ((size_t)((ptrdiff_t)(arr_item) - (ptrdiff_t)(arr_start)) < (size_t)(arr_len))
-
-/** Return the number of elements in a static array of elements. */
-#define ARRAY_SIZE(arr) (sizeof(arr) / sizeof(*(arr)))
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Pointer Macros
- * \{ */
-
-#define POINTER_OFFSET(ptr, offset) (void *)(((char *)ptr) + (offset))
-
-#define POINTER_FROM_INT(i) ((void *)(intptr_t)(i))
-#define POINTER_AS_INT(i) ((void)0, ((int)(intptr_t)(i)))
-
-#define POINTER_FROM_UINT(i) ((void *)(uintptr_t)(i))
-#define POINTER_AS_UINT(i) ((void)0, ((unsigned int)(uintptr_t)(i)))
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name List Macros
- * \{ */
-
-/**
- * A version of #LIST_FOREACH_MUTABLE that supports removing the item we're looping over.
- */
-#define LIST_FOREACH_MUTABLE(type, var, first) for (type var = (type)(first), *var##_iter_next; ((var != NULL) ? ((void)(var##_iter_next = (type)((var)->next)), 1) : 0); var = var##_iter_next)
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
 /** \name Datablock Definitions
  * { */
 
 typedef struct ProcessHandle {
-	struct ModuleHandle *modules;
+	ListBase modules;
 
 	// Native handle, this should probably be added into a private section?
 	uintptr_t native;
@@ -95,6 +61,7 @@ typedef struct ProcessHandle {
 
 typedef struct ModuleSection {
 	struct ModuleSection *prev, *next;
+
 	uintptr_t src;
 	uintptr_t dst;
 
@@ -110,6 +77,7 @@ typedef struct ModuleSection {
 
 typedef struct ModuleExport {
 	struct ModuleExport *prev, *next;
+	
 	uintptr_t ordinal;
 	uintptr_t fwdordinal;
 	char expname[MOM_MAX_EXPNAME_LEN];
@@ -121,6 +89,7 @@ typedef struct ModuleExport {
 
 typedef struct ModuleImport {
 	struct ModuleImport *prev, *next;
+
 	uintptr_t ordinal;
 	char expname[MOM_MAX_EXPNAME_LEN];
 	char libname[MOM_MAX_LIBNAME_LEN];
@@ -152,19 +121,20 @@ typedef struct ModuleRelocation {
 
 typedef struct ModuleHandle {
 	struct ModuleHandle *prev, *next;
+
+	ProcessHandle *process;
 	uintptr_t disk;
 	uintptr_t base;
 	uintptr_t real;
 	char dllname[MOM_MAX_DLLNAME_LEN];
 	
-	ProcessHandle *process;
-	ModuleSection *sections;
-	ModuleExport *exports;
-	ModuleImport *imports;
-	ModuleImport *delayed_imports;
-	ModuleTLS *tls;
-	ModuleException *exceptions;
-	ModuleRelocation *relocations;
+	ListBase sections;
+	ListBase exports;
+	ListBase imports;
+	ListBase delayed_imports;
+	ListBase tls;
+	ListBase exceptions;
+	ListBase relocations;
 	
 	/**
 	 * The following can be used however the native implementation deems appropriate!

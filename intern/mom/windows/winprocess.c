@@ -100,13 +100,9 @@ ProcessHandle *winmom_process_open(int identifier) {
 			CHAR FullDllName[MAX_PATH * 4];
 			int MaxLength = WideCharToMultiByte(CP_ACP, 0, local.FullDllName.Buffer, local.FullDllName.MaximumLength, FullDllName, ARRAYSIZE(FullDllName), 0, NULL);
 			ModuleHandle *module = MOM_module_open_by_address(handle, local.DllBase, local.Reserved3[1]);
-			memcpy(module->dllname, FullDllName, MaxLength);
 
-			/**
-			 * Add as HEAD, very easy very simple, I like!
-			 */
-			module->next = handle->modules;
-			handle->modules = module;
+			memcpy(module->dllname, FullDllName, MaxLength);
+			LIB_addtail(&handle->modules, module);
 
 			total++;
 		}
@@ -157,7 +153,11 @@ void winmom_process_free(ProcessHandle *handle, void *address) {
 }
 
 void winmom_process_close(ProcessHandle *handle) {
-	MOM_module_close(handle->modules);
+	LISTBASE_FOREACH_MUTABLE(ModuleHandle *, module, &handle->modules) {
+		MOM_module_close(module);
+	}
+	LIB_listbase_clear(&handle->modules);
+
 	if (winmom_process_handle(handle)) {
 		CloseHandle(winmom_process_handle(handle));
 	}
@@ -174,11 +174,11 @@ ModuleHandle *winmom_process_module_push(ProcessHandle *handle, ModuleHandle *mo
 		ModuleHandle *duplicate = MOM_module_open_by_file(MOM_module_name(module));
 
 		if (duplicate) {
-			duplicate->next = handle->modules;
-			duplicate->real = module->real;
 			/** Since we use the name to find a module copy the name from the original module! **/
 			memcpy(duplicate->dllname, module->dllname, sizeof(duplicate->dllname));
-			handle->modules = duplicate;
+			duplicate->real = module->real;
+
+			LIB_addtail(&handle->modules, duplicate);
 		}
 
 		return duplicate;

@@ -46,6 +46,7 @@ set(SRC_UNIX
 set(LIB
 	# Internal Library Dependencies
 	bob::intern::guardedalloc
+	bob::intern::utils
 	
 	# External Library Dependencies
 	
@@ -100,6 +101,7 @@ set(TEST
 set(LIB
 	# Internal Library Dependencies
 	bob::intern::guardedalloc
+	bob::intern::utils
 	bob::intern::mom
 	
 	# External Library Dependencies

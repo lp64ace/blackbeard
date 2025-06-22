@@ -63,7 +63,7 @@ bool mom_resolve_import(const char *libname, const char *name, int maxhops = 4) 
 		}
 	}
 
-	MOM_module_close(handle);
+	MOM_module_close_collection(handle);
 
 	return found;
 }
@@ -96,7 +96,7 @@ TEST(Mom, DependencyDisk) {
 			}
 		}
 	}
-	MOM_module_close(kernel32);
+	MOM_module_close_collection(kernel32);
 }
 
 TEST(Mom, DependencyMemory) {
@@ -128,7 +128,7 @@ TEST(Mom, DependencyMemory) {
 				}
 			}
 		}
-		MOM_module_close(kernel32);
+		MOM_module_close_collection(kernel32);
 	} while (false);
 	MOM_process_close(self);
 }

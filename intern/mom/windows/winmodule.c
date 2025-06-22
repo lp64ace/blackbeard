@@ -367,7 +367,9 @@ typedef ModuleHandle *(*fnMomCallbackSchema)(const char *resolved, void *userdat
  *  - [API-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
  */
 static ModuleHandle *winmom_module_open_by_schema(const char *schemaname, fnMomCallbackSchema proc, void *userdata) {
-	ModuleHandle *handle = NULL, *last = NULL;
+	ListBase list;
+	LIB_listbase_clear(&list);
+
 	ProcessHandle *self = MOM_process_self();
 
 	PEB peb;
@@ -399,16 +401,7 @@ static ModuleHandle *winmom_module_open_by_schema(const char *schemaname, fnMomC
 								CHAR physical[MAX_PATH];
 								WideCharToMultiByte(CP_ACP, 0, wphysical, -1, physical, ARRAYSIZE(physical), 0, NULL);
 
-								ModuleHandle *new = NULL;
-								if ((new = proc(physical, userdata))) {
-									if (last) {
-										last->next = new;
-									}
-									new->prev = last;
-									last = new;
-								}
-
-								handle = (handle) ? handle : new;
+								LIB_addtail(&list, proc(physical, userdata));
 							}
 						}
 					}
@@ -418,7 +411,7 @@ static ModuleHandle *winmom_module_open_by_schema(const char *schemaname, fnMomC
 	}
 
 	MOM_process_close(self);
-	return handle;
+	return list.first;
 }
 
 static inline void *winmom_module_open_by_file_schema(const char *resolved, void *userdata) {
@@ -557,42 +550,26 @@ ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *nam
 }
 
 void winmom_module_close(ModuleHandle *handle) {
-	ModuleHandle *prev = handle->prev, *next = handle->next;
-
-	LIST_FOREACH_MUTABLE(ModuleSection *, section, handle->sections) {
+	LISTBASE_FOREACH_MUTABLE(ModuleSection *, section, &handle->sections) {
 		MEM_SAFE_FREE(section);
 	}
-	LIST_FOREACH_MUTABLE(ModuleExport *, export, handle->exports) {
+	LISTBASE_FOREACH_MUTABLE(ModuleExport *, export, &handle->exports) {
 		MEM_SAFE_FREE(export);
 	}
-	LIST_FOREACH_MUTABLE(ModuleImport *, import, handle->imports) {
+	LISTBASE_FOREACH_MUTABLE(ModuleImport *, import, &handle->imports) {
 		MEM_SAFE_FREE(import);
 	}
-	LIST_FOREACH_MUTABLE(ModuleImport *, import, handle->delayed_imports) {
+	LISTBASE_FOREACH_MUTABLE(ModuleImport *, import, &handle->delayed_imports) {
 		MEM_SAFE_FREE(import);
 	}
-	LIST_FOREACH_MUTABLE(ModuleTLS *, tls, handle->tls) {
+	LISTBASE_FOREACH_MUTABLE(ModuleTLS *, tls, &handle->tls) {
 		MEM_SAFE_FREE(tls);
 	}
-	LIST_FOREACH_MUTABLE(ModuleRelocation *, relocation, handle->relocations) {
+	LISTBASE_FOREACH_MUTABLE(ModuleRelocation *, relocation, &handle->relocations) {
 		MEM_SAFE_FREE(relocation);
 	}
 
-	if (handle->next) {
-		handle->next->prev = NULL;
-	}
-	if (handle->prev) {
-		handle->prev->next = NULL;
-	}
-
 	MEM_SAFE_FREE(handle);
-
-	if (prev) {
-		winmom_module_close(prev);
-	}
-	if (next) {
-		winmom_module_close(next);
-	}
 }
 
 void *winmom_module_address(ModuleHandle *handle) {
@@ -611,8 +588,8 @@ size_t winmom_module_size(const ModuleHandle *handle) {
 }
 
 ModuleSection *winmom_module_section_begin(ModuleHandle *handle) {
-	if (!handle->sections) {
-		ModuleSection *new = MEM_callocN(sizeof(ModuleSection) + sizeof(IMAGE_SECTION_HEADER), "section"), *last = NULL;
+	if (LIB_listbase_is_empty(&handle->sections)) {
+		ModuleSection *new = MEM_callocN(sizeof(ModuleSection) + sizeof(IMAGE_SECTION_HEADER), "section");
 
 		IMAGE_SECTION_HEADER buffer;
 		IMAGE_SECTION_HEADER *header;
@@ -624,29 +601,18 @@ ModuleSection *winmom_module_section_begin(ModuleHandle *handle) {
 					header = &buffer;
 				}
 			}
-			new->prev = last;
 			new->src = (uintptr_t)winmom_module_resolve_relative_address(handle, header->VirtualAddress);
 			new->dst = (uintptr_t)winmom_module_resolve_virtual_address(handle, header->VirtualAddress);
 			memcpy(new->header, header, sizeof(IMAGE_SECTION_HEADER));
 
-			if (!handle->sections) {
-				handle->sections = last = new;
-			}
-			last = new;
-			last->next = new = MEM_callocN(sizeof(ModuleSection) + sizeof(IMAGE_SECTION_HEADER), "section");
-		}
-
-		if (last != NULL) {
-			/*
-			 * Unless the image is an invalid PE this should never happen!
-			 */
-			last->next = NULL;
+			LIB_addhead(&handle->sections, new);
+			new = MEM_callocN(sizeof(ModuleSection) + sizeof(IMAGE_SECTION_HEADER), "section");
 		}
 
 		MEM_SAFE_FREE(new);
 	}
 
-	return handle->sections;
+	return handle->sections.first;
 }
 
 const char *winmom_module_section_name(const ModuleHandle *handle, const ModuleSection *section) {
@@ -704,8 +670,8 @@ size_t winmom_module_section_size(const ModuleHandle *handle, const ModuleSectio
 }
 
 ModuleExport *winmom_module_export_begin(ModuleHandle *handle) {
-	if (!handle->exports) {
-		ModuleExport *new = MEM_callocN(sizeof(ModuleExport), "export"), *last = NULL;
+	if (LIB_listbase_is_empty(&handle->exports)) {
+		ModuleExport *new = MEM_callocN(sizeof(ModuleExport), "export");
 
 		IMAGE_EXPORT_DIRECTORY *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_EXPORT);
 		DWORD address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXPORT);
@@ -718,7 +684,6 @@ ModuleExport *winmom_module_export_begin(ModuleHandle *handle) {
 			for (DWORD index = 0; index < directory->NumberOfFunctions; index++) {
 				bool named = false;
 
-				new->prev = last;
 				new->ordinal = index;
 
 				if (address <= func[index] && func[index] <= address + winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_EXPORT)) {
@@ -752,24 +717,16 @@ ModuleExport *winmom_module_export_begin(ModuleHandle *handle) {
 					}
 				}
 
-				if (!handle->exports) {
-					handle->exports = last = new;
-				}
-				last = new;
-				last->next = new = MEM_callocN(sizeof(ModuleExport), "section");
+				LIB_addtail(&handle->exports, new);
+				new = MEM_callocN(sizeof(ModuleExport), "section");
 			}
-		}
-
-		if (last != NULL) {
-			// This will happen in the unlikely case that the module has no exports!
-			last->next = NULL;
 		}
 
 		MEM_SAFE_FREE(directory);
 		MEM_SAFE_FREE(new);
 	}
 
-	return handle->exports;
+	return handle->exports.first;
 }
 
 ModuleExport *winmom_module_export_find_by_name(ModuleHandle *handle, const char *name) {
@@ -848,8 +805,8 @@ static void winmom_module_import_make(ModuleHandle *handle, ModuleImport *import
 }
 
 ModuleImport *winmom_module_import_begin(ModuleHandle *handle) {
-	if (!handle->imports) {
-		ModuleImport *new = MEM_callocN(sizeof(ModuleImport), "import"), *last = NULL;
+	if (LIB_listbase_is_empty(&handle->imports)) {
+		ModuleImport *new = MEM_callocN(sizeof(ModuleImport), "import");
 
 		IMAGE_IMPORT_DESCRIPTOR *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_IMPORT);
 		DWORD address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_IMPORT);
@@ -915,33 +872,24 @@ ModuleImport *winmom_module_import_begin(ModuleHandle *handle) {
 			 */
 			eMomArchitecture architecture = MOM_module_architecture(handle);
 			for (uintptr_t expindex = 0; memcmp(thunk, &zero, MOM_module_architecture_pointer_size(architecture)); expindex++) {
-				new->prev = last;
 				winmom_module_import_make(handle, new, thunk, funk, libname);
 
 				new->from = desc->OriginalFirstThunk + expindex * MOM_module_architecture_pointer_size(architecture); // VA
 				new->to = desc->FirstThunk + expindex * MOM_module_architecture_pointer_size(architecture); // VA
 
-				if (!handle->imports) {
-					handle->imports = last = new;
-				}
-				last = new;
-				last->next = new = MEM_callocN(sizeof(ModuleImport), "import");
+				LIB_addtail(&handle->imports, new);
+				new = MEM_callocN(sizeof(ModuleImport), "import");
 
 				thunk = POINTER_OFFSET(thunk, MOM_module_architecture_pointer_size(architecture));
 				funk = POINTER_OFFSET(funk, MOM_module_architecture_pointer_size(architecture));
 			}
 		}
 
-		if (last != NULL) {
-			// This will happen in the unlikely case that the module has no imports!
-			last->next = NULL;
-		}
-
 		MEM_SAFE_FREE(directory);
 		MEM_SAFE_FREE(new);
 	}
 
-	return handle->imports;
+	return handle->imports.first;
 }
 
 void *winmom_module_import_from_disk(const ModuleHandle *handle, const ModuleImport *import) {
@@ -961,8 +909,8 @@ void *winmom_module_import_to_memory(const ModuleHandle *handle, const ModuleImp
 }
 
 ModuleImport *winmom_module_import_delayed_begin(ModuleHandle *handle) {
-	if (!handle->delayed_imports) {
-		ModuleImport *new = MEM_callocN(sizeof(ModuleImport), "import-delayed"), *last = NULL;
+	if (LIB_listbase_is_empty(&handle->delayed_imports)) {
+		ModuleImport *new = MEM_callocN(sizeof(ModuleImport), "import-delayed");
 
 		IMAGE_DELAYLOAD_DESCRIPTOR *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);
 		DWORD address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_DELAY_IMPORT);
@@ -1023,38 +971,29 @@ ModuleImport *winmom_module_import_delayed_begin(ModuleHandle *handle) {
 			 */
 			eMomArchitecture architecture = MOM_module_architecture(handle);
 			for (uintptr_t expindex = 0; memcmp(thunk, &zero, MOM_module_architecture_pointer_size(architecture)); expindex++) {
-				new->prev = last;
 				winmom_module_import_make(handle, new, thunk, funk, libname);
 
 				new->from = desc->ImportNameTableRVA + expindex *MOM_module_architecture_pointer_size(architecture);	 // VA
 				new->to = desc->ImportAddressTableRVA + expindex *MOM_module_architecture_pointer_size(architecture);	// VA
 
-				if (!handle->delayed_imports) {
-					handle->delayed_imports = last = new;
-				}
-				last = new;
-				last->next = new = MEM_callocN(sizeof(ModuleImport), "import-delayed");
+				LIB_addtail(&handle->delayed_imports, new);
+				new = MEM_callocN(sizeof(ModuleImport), "import-delayed");
 
 				thunk = POINTER_OFFSET(thunk, MOM_module_architecture_pointer_size(architecture));
 				funk = POINTER_OFFSET(funk, MOM_module_architecture_pointer_size(architecture));
 			}
 		}
 
-		if (last != NULL) {
-			// This will happen in the unlikely case that the module has no delayed_imports!
-			last->next = NULL;
-		}
-
 		MEM_SAFE_FREE(directory);
 		MEM_SAFE_FREE(new);
 	}
 
-	return handle->delayed_imports;
+	return handle->delayed_imports.first;
 }
 
 ModuleTLS *winmom_module_tls_begin(ModuleHandle *handle) {
-	if (!handle->tls) {
-		ModuleTLS *new = MEM_callocN(sizeof(ModuleTLS), "tls"), *last = NULL;
+	if (LIB_listbase_is_empty(&handle->tls)) {
+		ModuleTLS *new = MEM_callocN(sizeof(ModuleTLS), "tls");
 
 		void *vdirectory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_TLS);
 
@@ -1082,45 +1021,33 @@ ModuleTLS *winmom_module_tls_begin(ModuleHandle *handle) {
 		}
 
 		if (callbacks) {
-			if (!handle->tls) {
+			if (LIB_listbase_is_empty(&handle->tls)) {
 				if (handle->disk) {
 					for (size_t index = 0; index < ARRAYSIZE(buffer) && callbacks[index]; index++) {
-						new->prev = last;
 						new->src = callbacks[index];
 
-						if (!handle->tls) {
-							handle->tls = last = new;
-						}
-						last = new;
-						last->next = new = MEM_callocN(sizeof(ModuleTLS), "tls");
+						LIB_addtail(&handle->tls, new);
+						new = MEM_callocN(sizeof(ModuleTLS), "tls");
 					}
 				}
 			}
-			if (!handle->tls) {
+			if (LIB_listbase_is_empty(&handle->tls)) {
 				if (handle->real) {
 					for (size_t index = 0; index < ARRAYSIZE(buffer) && callbacks[index]; index++) {
-						new->prev = last;
 						new->dst = callbacks[index];
 
-						if (!handle->tls) {
-							handle->tls = last = new;
-						}
-						last = new;
-						last->next = new = MEM_callocN(sizeof(ModuleTLS), "tls");
+						LIB_addtail(&handle->tls, new);
+						new = MEM_callocN(sizeof(ModuleTLS), "tls");
 					}
 				}
 			}
-		}
-
-		if (last) {
-			last->next = NULL;
 		}
 
 		MEM_SAFE_FREE(new);
 		MEM_SAFE_FREE(vdirectory);
 	}
 
-	return handle->tls;
+	return handle->tls.first;
 }
 
 void *winmom_module_tls_disk(const ModuleHandle *handle, ModuleTLS *tls) {
@@ -1145,11 +1072,10 @@ void *winmom_module_tls_memory(const ModuleHandle *handle, ModuleTLS *tls) {
 #endif
 
 ModuleRelocation *winmom_module_relocation_begin(ModuleHandle *handle) {
-	if (!handle->relocations) {
-		ModuleRelocation *new = MEM_callocN(sizeof(ModuleRelocation), "relocation"), *last = NULL;
+	if (LIB_listbase_is_empty(&handle->relocations)) {
+		ModuleRelocation *new = MEM_callocN(sizeof(ModuleRelocation), "relocation");
 
 		IMAGE_BASE_RELOCATION *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_BASERELOC);
-		void *address = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_BASERELOC);
 
 		IMAGE_BASE_RELOCATION *itr = directory;
 		while (itr < POINTER_OFFSET(directory, winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_BASERELOC))) {
@@ -1158,7 +1084,6 @@ ModuleRelocation *winmom_module_relocation_begin(ModuleHandle *handle) {
 			PWORD data = POINTER_OFFSET(itr, sizeof(IMAGE_BASE_RELOCATION));
 
 			while (nrelocations--) {
-				new->prev = last;
 				switch (IMR_RELTYPE(*data)) {
 					case IMAGE_REL_BASED_HIGH: {
 						new->type = kMomRelocationHigh;
@@ -1182,11 +1107,8 @@ ModuleRelocation *winmom_module_relocation_begin(ModuleHandle *handle) {
 				new->src = va + IMR_RELOFFSET(*data);
 				new->dst = va + IMR_RELOFFSET(*data);
 
-				if (!handle->relocations) {
-					handle->relocations = last = new;
-				}
-				last = new;
-				last->next = new = MEM_callocN(sizeof(ModuleRelocation), "relocation");
+				LIB_addtail(&handle->relocations, new);
+				new = MEM_callocN(sizeof(ModuleRelocation), "relocation");
 
 				data++;
 			}
@@ -1194,15 +1116,12 @@ ModuleRelocation *winmom_module_relocation_begin(ModuleHandle *handle) {
 			itr = POINTER_OFFSET(itr, itr->SizeOfBlock);
 		}
 
-		if (last) {
-			last->next = NULL;
-		}
 
 		MEM_SAFE_FREE(new);
 		MEM_SAFE_FREE(directory);
 	}
 
-	return handle->relocations;
+	return handle->relocations.first;
 }
 
 void *winmom_module_relocation_disk(const ModuleHandle *handle, ModuleRelocation *relocation) {
@@ -1215,6 +1134,35 @@ void *winmom_module_relocation_memory(const ModuleHandle *handle, ModuleRelocati
 
 eMomRelocationType winmom_module_relocation_type(const ModuleHandle *handle, const ModuleRelocation *relocation){
 	return relocation->type;
+}
+
+ModuleException *winmom_module_exception_begin(ModuleHandle *handle) {
+	if (LIB_listbase_is_empty(&handle->exceptions)) {
+		ModuleException *new = MEM_callocN(sizeof(ModuleException), "exception");
+
+		IMAGE_RUNTIME_FUNCTION_ENTRY *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+
+		if (directory) {
+			new->src = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+			new->dst = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+
+			LIB_addtail(&handle->exceptions, new);
+			new = MEM_callocN(sizeof(ModuleException), "exception");
+		}
+
+		MEM_SAFE_FREE(new);
+		MEM_SAFE_FREE(directory);
+	}
+
+	return handle->exceptions.first;
+}
+
+void *winmom_module_exception_disk(const ModuleHandle *handle, ModuleException *exception) {
+	return winmom_module_resolve_relative_address(handle, exception->src);
+}
+
+void *winmom_module_exception_memory(const ModuleHandle *handle, ModuleException *exception) {
+	return winmom_module_resolve_virtual_address(handle, exception->dst);
 }
 
 /** \} */
@@ -1256,6 +1204,9 @@ fnMOM_module_relocation_begin MOM_module_relocation_begin = winmom_module_reloca
 fnMOM_module_relocation_disk MOM_module_relocation_disk = winmom_module_relocation_disk;
 fnMOM_module_relocation_memory MOM_module_relocation_memory = winmom_module_relocation_memory;
 fnMOM_module_relocation_type MOM_module_relocation_type = winmom_module_relocation_type;
+fnMOM_module_exception_begin MOM_module_exception_begin = winmom_module_exception_begin;
+fnMOM_module_exception_disk MOM_module_exception_disk = winmom_module_exception_disk;
+fnMOM_module_exception_memory MOM_module_exception_memory = winmom_module_exception_memory;
 
 fnMOM_module_header_is_valid MOM_module_header_is_valid = winmom_module_header_is_valid;
 

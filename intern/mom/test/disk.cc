@@ -23,7 +23,7 @@ TEST(MomDisk, Sections) {
 		EXPECT_NE(MOM_module_section_disk(kernel32, section), nullptr) << name;
 		EXPECT_EQ(MOM_module_section_memory(kernel32, section), nullptr) << name;
 	}
-	MOM_module_close(kernel32);
+	MOM_module_close_collection(kernel32);
 }
 
 TEST(MomDisk, Exports) {
@@ -40,7 +40,7 @@ TEST(MomDisk, Exports) {
 			EXPECT_EQ(MOM_module_export_memory(kernel32, exported), nullptr) << name;
 		}
 	}
-	MOM_module_close(kernel32);
+	MOM_module_close_collection(kernel32);
 }
 
 TEST(MomDisk, Imports) {
@@ -64,7 +64,7 @@ TEST(MomDisk, Imports) {
 		EXPECT_NE(lib, nullptr);
 		EXPECT_NE(name, nullptr);
 	}
-	MOM_module_close(kernel32);
+	MOM_module_close_collection(kernel32);
 }
 
 TEST(MomDisk, DelayedImports) {
@@ -88,7 +88,7 @@ TEST(MomDisk, DelayedImports) {
 		EXPECT_NE(lib, nullptr);
 		EXPECT_NE(name, nullptr);
 	}
-	MOM_module_close(kernel32);
+	MOM_module_close_collection(kernel32);
 }
 
 }  // namespace

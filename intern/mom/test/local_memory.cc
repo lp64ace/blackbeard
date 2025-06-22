@@ -29,7 +29,7 @@ TEST(MomLocal, Sections) {
 			EXPECT_EQ(MOM_module_section_disk(kernel32, section), nullptr) << name;
 			EXPECT_NE(MOM_module_section_memory(kernel32, section), nullptr) << name;
 		}
-		MOM_module_close(kernel32);
+		MOM_module_close_collection(kernel32);
 	} while (false);
 	MOM_process_close(self);
 }
@@ -50,7 +50,7 @@ TEST(MomLocal, Exports) {
 				}
 			}
 		}
-		MOM_module_close(kernel32);
+		MOM_module_close_collection(kernel32);
 	} while (false);
 	MOM_process_close(self);
 }
@@ -78,7 +78,7 @@ TEST(MomLocal, Imports) {
 			EXPECT_NE(lib, nullptr);
 			EXPECT_NE(name, nullptr);
 		}
-		MOM_module_close(kernel32);
+		MOM_module_close_collection(kernel32);
 	} while (false);
 	MOM_process_close(self);
 }
@@ -106,7 +106,7 @@ TEST(MomLocal, DelayedImports) {
 			EXPECT_NE(lib, nullptr);
 			EXPECT_NE(name, nullptr);
 		}
-		MOM_module_close(kernel32);
+		MOM_module_close_collection(kernel32);
 	} while (false);
 	MOM_process_close(self);
 }
@@ -141,7 +141,7 @@ TEST(MomLocal, ExportsWindows) {
 
 		FreeLibrary(hkernel32);
 
-		MOM_module_close(kernel32);
+		MOM_module_close_collection(kernel32);
 	} while (false);
 	MOM_process_close(self);
 }

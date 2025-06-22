@@ -34,6 +34,8 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 		return NULL;
 	} while (false);
 
+	void *address = NULL;
+
 	for (ModuleHandle *itr = handle; itr; itr = MOM_module_next(itr)) {
 		ModuleHandle *existing = NULL;
 
@@ -55,17 +57,18 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 			// The export we are looking for exists but it is a forwarded export!
 			if (MOM_module_export_lib(existing, exported)) {
 				if (MOM_module_export_forward_name(existing, exported)) {
-					MOM_module_close(handle);
+					MOM_module_close_collection(handle);
 					return BOB_manual_map_resolve_import(process, MOM_module_export_lib(existing, exported), MOM_module_export_forward_name(existing, exported), maxhops - 1);
 				} else {
-					MOM_module_close(handle);
+					MOM_module_close_collection(handle);
 					return BOB_manual_map_resolve_import(process, MOM_module_export_lib(existing, exported), POINTER_FROM_INT(MOM_module_export_forward_ordinal(existing, exported)), maxhops - 1);
 				}
 			}
 
 			if (exported) {
+				MOM_module_close_collection(handle);
+
 				// The export we are looking for exists and is a normal export!
-				MOM_module_close(handle);
 				return MOM_module_export_memory(existing, exported);
 			}
 		}
@@ -82,14 +85,15 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 		if (exported) {
 			// Try to manual map the module into the process as well so that we can resolve the export!
 			if (BOB_manual_map_module(process, handle, 0)) {
-				MOM_module_close(handle);
+				MOM_module_close_collection(handle);
+
 				// The next time we call this #BOB_manual_map_module must have updated the loaded modules to find this one!
 				return BOB_manual_map_resolve_import(process, libname, expname, maxhops - 1);
 			}
 		}
 	}
 
-	MOM_module_close(handle);
+	MOM_module_close_collection(handle);
 	return NULL;
 }
 
@@ -299,14 +303,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			return NULL;
 		}
 	}
-
-	/**
-	 * A lot of stuff will break in this part, 
-	 * we are executing Just In Time ASM in a remote process!
-	 * 
-	 * - C.S. And a lot of stuff broke. In fact, the only thing that didn't break was the brakes. 
-	 * Hell, right now, we don't even know if our paint job will last the whole 24 hours.
-	 */
 
 	MOM_process_module_push(process, handle);
 	return real;

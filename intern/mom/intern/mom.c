@@ -47,6 +47,21 @@ size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture) {
 /** \name Module
  * { */
 
+void mom_module_close_collection(ModuleHandle *handle) {
+	ModuleHandle *prev = handle->prev, *next = handle->next;
+
+	MOM_module_close(handle);
+
+	if (prev) {
+		prev->next = NULL;
+		mom_module_close_collection(prev);
+	}
+	if (next) {
+		next->prev = NULL;
+		mom_module_close_collection(next);
+	}
+}
+
 ModuleHandle *mom_module_prev(ModuleHandle *handle) {
 	return handle->next;
 }
@@ -127,8 +142,8 @@ ModuleTLS *mom_module_tls_end(ModuleHandle *handle) {
 	return NULL;
 }
 
-ModuleTLS *mom_module_tls_next(ModuleHandle *handle, ModuleTLS *tls) {
-	return (tls) ? tls->next : tls;
+ModuleTLS *mom_module_tls_next(ModuleHandle *handle, ModuleTLS *itr) {
+	return (itr) ? itr->next : itr;
 }
 
 ModuleRelocation *mom_module_relocation_end(ModuleHandle *handle) {
@@ -139,15 +154,29 @@ ModuleRelocation *mom_module_relocation_next(ModuleHandle *handle, ModuleRelocat
 	return (itr) ? itr->next : itr;
 }
 
-ModuleHandle *winmom_process_module_begin(ProcessHandle *handle) {
-	return handle->modules;
-}
-
-ModuleHandle *winmom_process_module_end(ProcessHandle *handle) {
+ModuleException *mom_module_exception_end(ModuleHandle *handle) {
 	return NULL;
 }
 
-ModuleHandle *winmom_process_module_next(ProcessHandle *handle, ModuleHandle *itr) {
+ModuleException *mom_module_exception_next(ModuleHandle *handle, ModuleException *itr) {
+	return (itr) ? itr->next : itr;
+}
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Process
+ * { */
+
+ModuleHandle *mom_process_module_begin(ProcessHandle *handle) {
+	return handle->modules.first;
+}
+
+ModuleHandle *mom_process_module_end(ProcessHandle *handle) {
+	return NULL;
+}
+
+ModuleHandle *mom_process_module_next(ProcessHandle *handle, ModuleHandle *itr) {
 	return (itr) ? itr->next : itr;
 }
 
@@ -157,6 +186,7 @@ ModuleHandle *winmom_process_module_next(ProcessHandle *handle, ModuleHandle *it
 /** \name Exports
  * { */
 
+fnMOM_module_close_collection MOM_module_close_collection = mom_module_close_collection;
 fnMOM_module_next MOM_module_prev = mom_module_prev;
 fnMOM_module_next MOM_module_next = mom_module_next;
 fnMOM_module_name MOM_module_name = mom_module_name;
@@ -180,9 +210,11 @@ fnMOM_module_tls_end MOM_module_tls_end = mom_module_tls_end;
 fnMOM_module_tls_next MOM_module_tls_next = mom_module_tls_next;
 fnMOM_module_relocation_end MOM_module_relocation_end = mom_module_relocation_end;
 fnMOM_module_relocation_next MOM_module_relocation_next = mom_module_relocation_next;
+fnMOM_module_exception_end MOM_module_exception_end = mom_module_exception_end;
+fnMOM_module_exception_next MOM_module_exception_next = mom_module_exception_next;
 
-fnMOM_process_module_begin MOM_process_module_begin = winmom_process_module_begin;
-fnMOM_process_module_end MOM_process_module_end = winmom_process_module_end;
-fnMOM_process_module_next MOM_process_module_next = winmom_process_module_next;
+fnMOM_process_module_begin MOM_process_module_begin = mom_process_module_begin;
+fnMOM_process_module_end MOM_process_module_end = mom_process_module_end;
+fnMOM_process_module_next MOM_process_module_next = mom_process_module_next;
 
 /** \} */
