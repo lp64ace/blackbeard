@@ -511,14 +511,15 @@ static inline void *winmom_module_open_by_name_schema(const char *resolved, void
 
 	for (ModuleHandle *itr = MOM_process_module_begin(process); itr != MOM_process_module_end(process); itr = MOM_process_module_next(process, itr)) {
 		if (winmom_module_loaded_match_name(process, MOM_module_name(itr), resolved)) {
-			if (itr->disk) {
-				return winmom_module_open_by_image(itr->image, MOM_module_memory_size(itr));
-			}
 			if (itr->real) {
-				return winmom_module_open_by_address(process, (const void *)itr->real, MOM_module_memory_size(itr));
+				ModuleHandle *handle = winmom_module_open_by_address(process, (const void *)itr->real, MOM_module_memory_size(itr));
+				memcpy(handle->dllname, itr->dllname, sizeof(handle->dllname));
+				return handle;
 			}
 		}
 	}
+
+	return NULL;
 }
 
 ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *name) {
@@ -536,12 +537,6 @@ ModuleHandle *winmom_module_open_by_name(ProcessHandle *process, const char *nam
 		if (winmom_module_loaded_match_name(process, MOM_module_name(itr), name)) {
 			if (itr->real) {
 				if ((handle = winmom_module_open_by_address(process, (const void *)itr->real, MOM_module_memory_size(itr)))) {
-					memcpy(handle->dllname, itr->dllname, sizeof(handle->dllname));
-					return handle;
-				}
-			}
-			if (itr->disk) {
-				if ((handle = winmom_module_open_by_image(itr->image, MOM_module_memory_size(itr)))) {
 					memcpy(handle->dllname, itr->dllname, sizeof(handle->dllname));
 					return handle;
 				}
