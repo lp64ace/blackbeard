@@ -129,12 +129,10 @@ typedef void *(*fnMOM_module_relocation_disk)(const struct ModuleHandle *handle,
 // Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
 typedef void *(*fnMOM_module_relocation_memory)(const struct ModuleHandle *handle, struct ModuleRelocation *relocation);
 typedef eMomRelocationType (*fnMOM_module_relocation_type)(const struct ModuleHandle *handle, const struct ModuleRelocation *relocation);
-typedef struct ModuleException *(*fnMOM_module_exception_begin)(struct ModuleHandle *handle);
-typedef struct ModuleException *(*fnMOM_module_exception_end)(struct ModuleHandle *handle);
-typedef struct ModuleException *(*fnMOM_module_exception_next)(struct ModuleHandle *handle, struct ModuleException *itr);
-typedef void *(*fnMOM_module_exception_disk)(const struct ModuleHandle *handle, struct ModuleException *tls);
+typedef void *(*fnMOM_module_exception_disk)(struct ModuleHandle *handle);
 // Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef void *(*fnMOM_module_exception_memory)(const struct ModuleHandle *handle, struct ModuleException *tls);
+typedef void *(*fnMOM_module_exception_memory)(struct ModuleHandle *handle);
+typedef int (*fnMOM_module_exception_length)(const struct ModuleHandle *handle);
 
 typedef enum eMomMemoryProtect {
 	kMomProtectNone = 0,
@@ -223,11 +221,9 @@ extern fnMOM_module_relocation_next MOM_module_relocation_next;
 extern fnMOM_module_relocation_disk MOM_module_relocation_disk;
 extern fnMOM_module_relocation_memory MOM_module_relocation_memory;
 extern fnMOM_module_relocation_type MOM_module_relocation_type;
-extern fnMOM_module_exception_begin MOM_module_exception_begin;
-extern fnMOM_module_exception_end MOM_module_exception_end;
-extern fnMOM_module_exception_next MOM_module_exception_next;
 extern fnMOM_module_exception_disk MOM_module_exception_disk;
 extern fnMOM_module_exception_memory MOM_module_exception_memory;
+extern fnMOM_module_exception_length MOM_module_exception_length;
 
 /** \} */
 

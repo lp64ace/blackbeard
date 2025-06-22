@@ -1136,33 +1136,23 @@ eMomRelocationType winmom_module_relocation_type(const ModuleHandle *handle, con
 	return relocation->type;
 }
 
-ModuleException *winmom_module_exception_begin(ModuleHandle *handle) {
-	if (LIB_listbase_is_empty(&handle->exceptions)) {
-		ModuleException *new = MEM_callocN(sizeof(ModuleException), "exception");
-
-		IMAGE_RUNTIME_FUNCTION_ENTRY *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
-
-		if (directory) {
-			new->src = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
-			new->dst = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
-
-			LIB_addtail(&handle->exceptions, new);
-			new = MEM_callocN(sizeof(ModuleException), "exception");
-		}
-
-		MEM_SAFE_FREE(new);
-		MEM_SAFE_FREE(directory);
+void *winmom_module_exception_disk(ModuleHandle *handle) {
+	if (!handle->exceptions) {
+		handle->exceptions = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
 	}
-
-	return handle->exceptions.first;
+	return winmom_module_resolve_relative_address(handle, handle->exceptions);
 }
 
-void *winmom_module_exception_disk(const ModuleHandle *handle, ModuleException *exception) {
-	return winmom_module_resolve_relative_address(handle, exception->src);
+void *winmom_module_exception_memory(ModuleHandle *handle) {
+	if (!handle->exceptions) {
+		handle->exceptions = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+	}
+	return winmom_module_resolve_virtual_address(handle, handle->exceptions);
 }
 
-void *winmom_module_exception_memory(const ModuleHandle *handle, ModuleException *exception) {
-	return winmom_module_resolve_virtual_address(handle, exception->dst);
+size_t winmom_module_exception_length(const ModuleHandle *handle) {
+	size_t size = winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+	return size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
 }
 
 /** \} */
@@ -1204,9 +1194,9 @@ fnMOM_module_relocation_begin MOM_module_relocation_begin = winmom_module_reloca
 fnMOM_module_relocation_disk MOM_module_relocation_disk = winmom_module_relocation_disk;
 fnMOM_module_relocation_memory MOM_module_relocation_memory = winmom_module_relocation_memory;
 fnMOM_module_relocation_type MOM_module_relocation_type = winmom_module_relocation_type;
-fnMOM_module_exception_begin MOM_module_exception_begin = winmom_module_exception_begin;
 fnMOM_module_exception_disk MOM_module_exception_disk = winmom_module_exception_disk;
 fnMOM_module_exception_memory MOM_module_exception_memory = winmom_module_exception_memory;
+fnMOM_module_exception_length MOM_module_exception_length = winmom_module_exception_length;
 
 fnMOM_module_header_is_valid MOM_module_header_is_valid = winmom_module_header_is_valid;
 

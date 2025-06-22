@@ -154,14 +154,6 @@ ModuleRelocation *mom_module_relocation_next(ModuleHandle *handle, ModuleRelocat
 	return (itr) ? itr->next : itr;
 }
 
-ModuleException *mom_module_exception_end(ModuleHandle *handle) {
-	return NULL;
-}
-
-ModuleException *mom_module_exception_next(ModuleHandle *handle, ModuleException *itr) {
-	return (itr) ? itr->next : itr;
-}
-
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -210,8 +202,6 @@ fnMOM_module_tls_end MOM_module_tls_end = mom_module_tls_end;
 fnMOM_module_tls_next MOM_module_tls_next = mom_module_tls_next;
 fnMOM_module_relocation_end MOM_module_relocation_end = mom_module_relocation_end;
 fnMOM_module_relocation_next MOM_module_relocation_next = mom_module_relocation_next;
-fnMOM_module_exception_end MOM_module_exception_end = mom_module_exception_end;
-fnMOM_module_exception_next MOM_module_exception_next = mom_module_exception_next;
 
 fnMOM_process_module_begin MOM_process_module_begin = mom_process_module_begin;
 fnMOM_process_module_end MOM_process_module_end = mom_process_module_end;

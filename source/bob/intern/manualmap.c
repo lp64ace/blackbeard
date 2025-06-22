@@ -304,6 +304,12 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		}
 	}
 
+	/** RtlAddFunctionTable works for Win64 and ARM architectures */
+	if (MOM_module_architecture(handle) == kMomArchitectureAmd64) {
+		void *seh = MOM_module_exception_memory(handle);
+		int count = MOM_module_exception_length(handle);
+	}
+
 	MOM_process_module_push(process, handle);
 	return real;
 }

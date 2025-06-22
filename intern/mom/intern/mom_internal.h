@@ -104,13 +104,6 @@ typedef struct ModuleTLS {
 	uintptr_t dst;
 } ModuleTLS;
 
-typedef struct ModuleException {
-	struct ModuleException *prev, *next;
-
-	uintptr_t src;
-	uintptr_t dst;
-} ModuleException;
-
 typedef struct ModuleRelocation {
 	struct ModuleRelocation *prev, *next;
 
@@ -133,8 +126,9 @@ typedef struct ModuleHandle {
 	ListBase imports;
 	ListBase delayed_imports;
 	ListBase tls;
-	ListBase exceptions;
 	ListBase relocations;
+
+	uintptr_t exceptions;
 	
 	/**
 	 * The following can be used however the native implementation deems appropriate!
