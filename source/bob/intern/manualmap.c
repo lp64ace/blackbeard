@@ -15,7 +15,24 @@
 
 // TODO Slow as fuck! Hopefully we can fix that at some point!
 void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname, const char *expname, int maxhops) {
-	ModuleHandle *handle = MOM_module_open_by_name(process, libname);
+	ModuleHandle *handle = NULL;
+	
+	do {
+		if ((handle = MOM_module_open_by_name(process, libname))) {
+			break;
+		}
+		if ((handle = MOM_module_open_by_file(libname))) {
+			break;
+		}
+
+		/**
+		 * We tried to find the module in an already loaded memory address... we failed!
+		 * We tried to find the modile in the disk... we failed!
+		 * 
+		 * Oh well...!
+		 */
+		return NULL;
+	} while (false);
 
 	for (ModuleHandle *itr = handle; itr; itr = MOM_module_next(itr)) {
 		ModuleHandle *existing = NULL;
@@ -192,6 +209,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 	ptrdiff_t delta = handle->real - handle->base;
 
+	bool relocations = true;
 	for (ModuleRelocation *relocation = MOM_module_relocation_begin(handle); relocation != MOM_module_relocation_end(handle); relocation = MOM_module_relocation_next(handle, relocation)) {
 		switch (MOM_module_relocation_type(handle, relocation)) {
 			case kMomRelocationHigh: {
@@ -200,8 +218,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 				uint16_t value;
 				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 
 				fprintf(stdout, "[BOB] relocate HIGH  FROM 0x%p TO ", (void *)value);
@@ -210,8 +227,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 			} break;
 			case kMomRelocationLow: {
@@ -220,8 +236,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 				uint16_t value;
 				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 
 				fprintf(stdout, "[BOB] relocate LOW   FROM 0x%p TO ", (void *)value);
@@ -230,8 +245,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 			} break;
 			case kMomRelocationHighLow: {
@@ -240,8 +254,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 				uint32_t value;
 				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 
 				fprintf(stdout, "[BOB] relocate HILOW FROM 0x%p TO ", (void *)value);
@@ -250,8 +263,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 			} break;
 			case kMomRelocationDir64: {
@@ -260,8 +272,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 				uint64_t value;
 				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 
 				fprintf(stdout, "[BOB] relocate DIR64 FROM 0x%p TO ", (void *)value);
@@ -270,11 +281,15 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
 					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					MOM_module_close(handle);
-					return NULL;
+					relocations &= false;
 				}
 			} break;
 		}
+	}
+
+	if (!relocations) {
+		MOM_module_close(handle);
+		return NULL;
 	}
 
 	for (ModuleSection *section = MOM_module_section_begin(handle); section != MOM_module_section_end(handle); section = MOM_module_section_next(handle, section)) {
