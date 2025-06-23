@@ -431,6 +431,13 @@ public:
 				// return 0;
 			}
 			MOM_event_reset(this->evtlocal);
+			/**
+			 * Because when the event is triggered the stack has not been fully cleared yet,
+			 * we need to wait a little bit longer so that the RSP can be re-aligned again!
+			 */
+			if (!MOM_event_wait(evtlocal, 1)) {
+				// return 0;
+			}
 
 			uint64_t ret;
 			MOM_process_read(this->process, this->ptrsave(0), &ret, sizeof(ret));
