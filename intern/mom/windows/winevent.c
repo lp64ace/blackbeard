@@ -10,7 +10,7 @@
 /** \name Event Platform Specific
  * { */
 
-HANDLE *winmom_event_native(const EventHandle *event) {
+HANDLE *winmom_event_native(EventHandle *event) {
 	return (HANDLE)event;
 }
 
@@ -28,7 +28,7 @@ void winmom_event_close(EventHandle *event) {
 	CloseHandle(winmom_event_native(event));
 }
 
-void *winmom_event_share(const EventHandle *event, ProcessHandle *process) {
+void *winmom_event_share(EventHandle *event, ProcessHandle *process) {
 	HANDLE duplicate;
 	if (!DuplicateHandle(GetCurrentProcess(), winmom_event_native(event), winmom_process_handle(process), &duplicate, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
 		return NULL;

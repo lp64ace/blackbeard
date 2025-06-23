@@ -27,8 +27,7 @@ ThreadHandle *winmom_thread_open(int identifier) {
 ThreadHandle *winmom_thread_spawn(ProcessHandle *process, void *procedure, void *argument) {
 	HANDLE thread;
 
-	HMODULE ntdll = LoadLibrary(_T("ntdll.dll"));
-	fnNtCreateThreadEx _NtCreateThreadEx = (fnNtCreateThreadEx)GetProcAddress(ntdll, "NtCreateThreadEx");
+	fnNtCreateThreadEx _NtCreateThreadEx = (fnNtCreateThreadEx)winmom_resolve_proc("ntdll.dll", "NtCreateThreadEx");
 	if (!NT_SUCCESS(_NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, winmom_process_handle(process), procedure, argument, 0, 0, 0, 0, NULL))) {
 		return NULL;
 	}
@@ -45,7 +44,7 @@ void winmom_thread_close(ThreadHandle *handle) {
 }
 
 bool winmom_thread_queue_apc(ThreadHandle *handle, void *procedure, void *argument) {
-	QueueUserAPC(procedure, winmom_thread_handle(handle), argument);
+	QueueUserAPC(procedure, winmom_thread_handle(handle), (ULONG_PTR)argument);
 
 	return true;
 }

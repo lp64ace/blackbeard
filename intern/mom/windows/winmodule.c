@@ -13,14 +13,14 @@
  * { */
 
 // Returns the memory address of the virtual address within the loaded buffer from disk
-static inline void *winmom_module_resolve_virtual_address_to_disk(const ModuleHandle *handle, uintptr_t virtual_address) {
+static inline void *winmom_module_resolve_virtual_address_to_disk(ModuleHandle *handle, uintptr_t virtual_address) {
 	if ((void *)handle->disk == NULL || (void *)virtual_address == NULL) {
 		return NULL;
 	}
 
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
-			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			for (IMAGE_SECTION_HEADER *header = IMAGE_FIRST_SECTION(nt); header != IMAGE_FIRST_SECTION(nt) + nt->FileHeader.NumberOfSections; header++) {
 				if (header->VirtualAddress <= virtual_address && virtual_address < header->VirtualAddress + header->Misc.VirtualSize) {
@@ -33,7 +33,7 @@ static inline void *winmom_module_resolve_virtual_address_to_disk(const ModuleHa
 			}
 		} break;
 		case kMomArchitectureAmd64: {
-			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			for (IMAGE_SECTION_HEADER *header = IMAGE_FIRST_SECTION(nt); header != IMAGE_FIRST_SECTION(nt) + nt->FileHeader.NumberOfSections; header++) {
 				if (header->VirtualAddress <= virtual_address && virtual_address < header->VirtualAddress + header->Misc.VirtualSize) {
@@ -51,19 +51,19 @@ static inline void *winmom_module_resolve_virtual_address_to_disk(const ModuleHa
 }
 
 // Returns the real address of the virtual address within the already loaded module
-static inline void *winmom_module_resolve_virtual_address_to_memory(const ModuleHandle *handle, uintptr_t virtual_address) {
+static inline void *winmom_module_resolve_virtual_address_to_memory(ModuleHandle *handle, uintptr_t virtual_address) {
 	if ((void *)handle->real == NULL || (void *)virtual_address == NULL) {
 		return NULL;
 	}
 
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
-			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			return POINTER_OFFSET((void *)handle->real, virtual_address);
 		} break;
 		case kMomArchitectureAmd64: {
-			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			return POINTER_OFFSET((void *)handle->real, virtual_address);
 		} break;
@@ -73,7 +73,7 @@ static inline void *winmom_module_resolve_virtual_address_to_memory(const Module
 }
 
 // Returns the memory address of the virtual address within the loaded buffer from memory
-static inline void *winmom_module_resolve_virtual_address_to_image(const ModuleHandle *handle, uintptr_t virtual_address) {
+static inline void *winmom_module_resolve_virtual_address_to_image(ModuleHandle *handle, uintptr_t virtual_address) {
 	if (handle->disk) {
 		return winmom_module_resolve_virtual_address_to_disk(handle, virtual_address);
 	}
@@ -86,7 +86,7 @@ static inline void *winmom_module_resolve_virtual_address_to_image(const ModuleH
 	return NULL;
 }
 
-HMODULE winmom_module_handle(const ModuleHandle *handle) {
+HMODULE winmom_module_handle(ModuleHandle *handle) {
 	return (HMODULE)handle->real;
 }
 
@@ -118,7 +118,7 @@ static bool winmom_module_header_is_valid(const ModuleHandle *handle) {
 /*
  * Image section header is consistent accross architectures!
  */
-static IMAGE_SECTION_HEADER *winmom_module_native_section_begin(const ModuleHandle *handle) {
+static IMAGE_SECTION_HEADER *winmom_module_native_section_begin(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
 			return IMAGE_FIRST_SECTION(NT32(handle));
@@ -130,7 +130,7 @@ static IMAGE_SECTION_HEADER *winmom_module_native_section_begin(const ModuleHand
 	return NULL;
 }
 
-static IMAGE_SECTION_HEADER *winmom_module_native_section_end(const ModuleHandle *handle) {
+static IMAGE_SECTION_HEADER *winmom_module_native_section_end(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
 			return IMAGE_FIRST_SECTION(NT32(handle)) + NT32(handle)->FileHeader.NumberOfSections;
@@ -142,7 +142,7 @@ static IMAGE_SECTION_HEADER *winmom_module_native_section_end(const ModuleHandle
 	return NULL;
 }
 
-static size_t winmom_module_native_directory_size(const ModuleHandle *handle, int directory) {
+static size_t winmom_module_native_directory_size(ModuleHandle *handle, int directory) {
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
 			return NT32(handle)->OptionalHeader.DataDirectory[directory].Size;
@@ -154,10 +154,10 @@ static size_t winmom_module_native_directory_size(const ModuleHandle *handle, in
 	return 0;
 }
 
-static DWORD winmom_module_native_directory_address(const ModuleHandle *handle, int directory) {
+static DWORD winmom_module_native_directory_address(ModuleHandle *handle, int directory) {
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
-			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			if (!nt->OptionalHeader.DataDirectory[directory].Size) {
 				return 0;
@@ -166,7 +166,7 @@ static DWORD winmom_module_native_directory_address(const ModuleHandle *handle, 
 			return nt->OptionalHeader.DataDirectory[directory].VirtualAddress;
 		} break;
 		case kMomArchitectureAmd64: {
-			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			if (!nt->OptionalHeader.DataDirectory[directory].Size) {
 				return 0;
@@ -178,7 +178,7 @@ static DWORD winmom_module_native_directory_address(const ModuleHandle *handle, 
 	return 0;
 }
 
-static void *winmom_module_native_directory(const ModuleHandle *handle, int directory) {
+static void *winmom_module_native_directory(ModuleHandle *handle, int directory) {
 	return winmom_module_resolve_virtual_address_to_image(handle, winmom_module_native_directory_address(handle, directory));
 }
 
@@ -211,8 +211,9 @@ static bool winmom_module_resolve_exports(ModuleHandle *handle) {
 
 		if (address <= functions[index] && functions[index] <= address + winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_EXPORT)) {
 			char forward[MOM_MAX_LIBNAME_LEN + MOM_MAX_EXPNAME_LEN];
-
-			memcpy(forward, winmom_module_resolve_virtual_address_to_image(handle, functions[index]), ARRAYSIZE(forward));
+			
+			strncpy(forward, winmom_module_resolve_virtual_address_to_image(handle, functions[index]), ARRAYSIZE(forward));
+			forward[ARRAYSIZE(forward) - 1] = '\0';
 
 			if (sscanf(forward, "%[^.].%s", new->libname, new->fwdname) > 0) {
 				snprintf(new->libname, MOM_MAX_LIBNAME_LEN, "%s.dll", new->libname);
@@ -251,8 +252,8 @@ static bool winmom_module_resolve_import(ModuleHandle *handle, ModuleImport *imp
 
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
-			IMAGE_THUNK_DATA32 *thunk = vthunk;
-			IMAGE_THUNK_DATA32 *funk = vfunk;
+			const IMAGE_THUNK_DATA32 *thunk = vthunk;
+			const IMAGE_THUNK_DATA32 *funk = vfunk;
 
 			if (IMAGE_SNAP_BY_ORDINAL32(thunk->u1.Ordinal)) {
 				imported->expordinal = IMAGE_ORDINAL32(thunk->u1.Ordinal);
@@ -261,8 +262,8 @@ static bool winmom_module_resolve_import(ModuleHandle *handle, ModuleImport *imp
 			}
 		} break;
 		case kMomArchitectureAmd64: {
-			IMAGE_THUNK_DATA64 *thunk = vthunk;
-			IMAGE_THUNK_DATA64 *funk = vfunk;
+			const IMAGE_THUNK_DATA64 *thunk = vthunk;
+			const IMAGE_THUNK_DATA64 *funk = vfunk;
 
 			if (IMAGE_SNAP_BY_ORDINAL64(thunk->u1.Ordinal)) {
 				imported->expordinal = IMAGE_ORDINAL64(thunk->u1.Ordinal);
@@ -498,7 +499,7 @@ static bool winmom_module_resolve_manifest(ModuleHandle *handle) {
 	for (size_t i = 0; i < root->NumberOfIdEntries + root->NumberOfNamedEntries; i++) {
 		IMAGE_RESOURCE_DIRECTORY_ENTRY *entry = POINTER_OFFSET(resource, rootoffset);
 
-		if (entry->DataIsDirectory == NULL || entry->Id != 0x18) {
+		if (entry->DataIsDirectory == 0 || entry->Id != 0x18) {
 			rootoffset += sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY);
 			continue;
 		}
@@ -508,7 +509,7 @@ static bool winmom_module_resolve_manifest(ModuleHandle *handle) {
 		for (size_t j = 0; j < directory->NumberOfIdEntries + directory->NumberOfNamedEntries; j++) {
 			IMAGE_RESOURCE_DIRECTORY_ENTRY *item = POINTER_OFFSET(resource, diroffset);
 
-			if (item->DataIsDirectory == NULL || (item->Id != 1 && item->Id != 2 && item->Id != 3)) {
+			if (item->DataIsDirectory == 0 || (item->Id != 1 && item->Id != 2 && item->Id != 3)) {
 				diroffset += sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY);
 				continue;
 			}
@@ -628,7 +629,7 @@ static ModuleHandle *winmom_module_open_by_name_from_memory(ProcessHandle *handl
 	LISTBASE_FOREACH(ModuleHandle *, module, &handle->modules) {
 		if (winmom_module_loaded_match_name(MOM_module_name(module), resolved)) {
 			if (module->real) {
-				ModuleHandle *loaded = MOM_module_open_by_address(handle, module->real, MOM_module_size(module));
+				ModuleHandle *loaded = MOM_module_open_by_address(handle, (void *)module->real, MOM_module_size(module));
 				memcpy(loaded->dllname, MOM_module_name(module), MOM_MAX_DLLNAME_LEN);
 				return loaded;
 			}
@@ -688,7 +689,7 @@ ListBase winmom_module_open_by_name(ProcessHandle *process, const char *name) {
 ModuleHandle *winmom_module_open_by_image(const void *image, size_t length) {
 	ModuleHandle *handle = MEM_callocN(sizeof(ModuleHandle) + length, "ModuleHandle");
 
-	handle->disk = handle->image;
+	handle->disk = (uintptr_t)handle->image;
 
 	memcpy(handle->image, image, length);
 
@@ -713,7 +714,7 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 	ModuleHandle *handle = MEM_callocN(sizeof(ModuleHandle) + length, "ModuleHandle");
 
 	handle->process = process;
-	handle->real = address;
+	handle->real = (uintptr_t)address;
 
 	if (handle->process) {
 		MOM_process_read(handle->process, address, handle->image, length);
@@ -738,7 +739,7 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 	return handle;
 }
 
-size_t winmom_module_size(const ModuleHandle *handle) {
+size_t winmom_module_size(ModuleHandle *handle) {
 	uintptr_t lo = 0x7FFFFFFFFFFFFFFF;
 	uintptr_t hi = 0x0000000000000000;
 	for (IMAGE_SECTION_HEADER *section = winmom_module_native_section_begin(handle); section != winmom_module_native_section_end(handle); section++) {
@@ -773,40 +774,40 @@ void winmom_module_close(ModuleHandle *handle) {
 }
 
 eMomArchitecture winmom_module_architecture(ModuleHandle *handle) {
-	const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER *)handle->image;
-	if (((const IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
-		if (((const IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+	IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)handle->image;
+	if (((IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
+		if (((IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
 			return kMomArchitectureAmd32;
 		}
 	}
-	if (((const IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
-		if (((const IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
+	if (((IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
+		if (((IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
 			return kMomArchitectureAmd64;
 		}
 	}
 	return kMomArchitectureNone;
 }
 
-const char *winmom_module_section_name(const ModuleHandle *handle, const ModuleSection *section) {
-	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->private;
+const char *winmom_module_section_name(ModuleHandle *handle, ModuleSection *section) {
+	IMAGE_SECTION_HEADER *header = (IMAGE_SECTION_HEADER *)section->private;
 
 	return header->Name;
 }
 
-void *winmom_module_section_logical(const ModuleHandle *handle, const ModuleSection *section) {
-	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->private;
+void *winmom_module_section_logical(ModuleHandle *handle, ModuleSection *section) {
+	IMAGE_SECTION_HEADER *header = (IMAGE_SECTION_HEADER *)section->private;
 
 	return winmom_module_resolve_virtual_address_to_image(handle, header->VirtualAddress);
 }
 
-void *winmom_module_section_physical(const ModuleHandle *handle, const ModuleSection *section) {
-	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->private;
+void *winmom_module_section_physical(ModuleHandle *handle, ModuleSection *section) {
+	IMAGE_SECTION_HEADER *header = (IMAGE_SECTION_HEADER *)section->private;
 
 	return winmom_module_resolve_virtual_address_to_memory(handle, header->VirtualAddress);
 }
 
-int winmom_module_section_protection(const ModuleHandle *handle, const ModuleSection *section) {
-	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->private;
+int winmom_module_section_protection(ModuleHandle *handle, ModuleSection *section) {
+	IMAGE_SECTION_HEADER *header = (IMAGE_SECTION_HEADER *)section->private;
 
 	if (header->Characteristics & (IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_EXECUTE)) {
 		int protection = 0;
@@ -825,78 +826,78 @@ int winmom_module_section_protection(const ModuleHandle *handle, const ModuleSec
 	return 0;
 }
 
-size_t winmom_module_section_size(const ModuleHandle *handle, const ModuleSection *section) {
-	const IMAGE_SECTION_HEADER *header = (const IMAGE_SECTION_HEADER *)section->private;
+size_t winmom_module_section_size(ModuleHandle *handle, ModuleSection *section) {
+	IMAGE_SECTION_HEADER *header = (IMAGE_SECTION_HEADER *)section->private;
 
 	return header->Misc.VirtualSize;
 }
 
-void *winmom_module_export_logical(const ModuleHandle *handle, const ModuleExport *exported) {
+void *winmom_module_export_logical(ModuleHandle *handle, ModuleExport *exported) {
 	return winmom_module_resolve_virtual_address_to_image(handle, exported->va);
 }
 
-void *winmom_module_export_physical(const ModuleHandle *handle, const ModuleExport *exported) {
+void *winmom_module_export_physical(ModuleHandle *handle, ModuleExport *exported) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, exported->va);
 }
 
-void *winmom_module_import_logical_thunk(const ModuleHandle *handle, const ModuleImport *exported) {
+void *winmom_module_import_logical_thunk(ModuleHandle *handle, ModuleImport *exported) {
 	return winmom_module_resolve_virtual_address_to_image(handle, exported->thunk_va);
 }
 
-void *winmom_module_import_logical_funk(const ModuleHandle *handle, const ModuleImport *exported) {
+void *winmom_module_import_logical_funk(ModuleHandle *handle, ModuleImport *exported) {
 	return winmom_module_resolve_virtual_address_to_image(handle, exported->funk_va);
 }
 
-void *winmom_module_import_physical_thunk(const ModuleHandle *handle, const ModuleImport *exported) {
+void *winmom_module_import_physical_thunk(ModuleHandle *handle, ModuleImport *exported) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, exported->thunk_va);
 }
 
-void *winmom_module_import_physical_funk(const ModuleHandle *handle, const ModuleImport *exported) {
+void *winmom_module_import_physical_funk(ModuleHandle *handle, ModuleImport *exported) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, exported->funk_va);
 }
 
-void *winmom_module_relocation_logical(const ModuleHandle *handle, const ModuleRelocation *exported) {
+void *winmom_module_relocation_logical(ModuleHandle *handle, ModuleRelocation *exported) {
 	return winmom_module_resolve_virtual_address_to_image(handle, exported->va);
 }
 
-void *winmom_module_relocation_physical(const ModuleHandle *handle, const ModuleRelocation *exported) {
+void *winmom_module_relocation_physical(ModuleHandle *handle, ModuleRelocation *exported) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, exported->va);
 }
 
-size_t winmom_module_seh_count(const ModuleHandle *handle) {
+size_t winmom_module_seh_count(ModuleHandle *handle) {
 	size_t size = winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
 	return size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
 }
 
-void *winmom_module_seh_logical(const ModuleHandle *handle) {
+void *winmom_module_seh_logical(ModuleHandle *handle) {
 	return winmom_module_resolve_virtual_address_to_image(handle, handle->exceptions);
 }
 
-void *winmom_module_seh_physical(const ModuleHandle *handle) {
+void *winmom_module_seh_physical(ModuleHandle *handle) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, handle->exceptions);
 }
 
-size_t winmom_module_manifest_size(const ModuleHandle *handle) {
+size_t winmom_module_manifest_size(ModuleHandle *handle) {
 	return handle->manifest_end - handle->manifest_begin;
 }
 
-void *winmom_module_manifest_logical(const ModuleHandle *handle) {
+void *winmom_module_manifest_logical(ModuleHandle *handle) {
 	return winmom_module_resolve_virtual_address_to_image(handle, handle->manifest_begin);
 }
 
-void *winmom_module_manifest_physical(const ModuleHandle *handle) {
+void *winmom_module_manifest_physical(ModuleHandle *handle) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, handle->manifest_begin);
 }
 
-void *winmom_module_entry_logical(const ModuleHandle *handle) {
+void *winmom_module_entry_logical(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
-			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			return winmom_module_resolve_virtual_address_to_image(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;
 		case kMomArchitectureAmd64: {
-			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			return winmom_module_resolve_virtual_address_to_image(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;
@@ -904,15 +905,15 @@ void *winmom_module_entry_logical(const ModuleHandle *handle) {
 	return 0;
 }
 
-void *winmom_module_entry_physical(const ModuleHandle *handle) {
+void *winmom_module_entry_physical(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
 		case kMomArchitectureAmd32: {
-			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			return winmom_module_resolve_virtual_address_to_memory(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;
 		case kMomArchitectureAmd64: {
-			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			return winmom_module_resolve_virtual_address_to_memory(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;

@@ -64,7 +64,7 @@ typedef struct ProcessHandle {
 typedef struct ModuleSection {
 	struct ModuleSection *prev, *next;
 
-	const char private[];
+	char private[];
 } ModuleSection;
 
 typedef struct ModuleExport {

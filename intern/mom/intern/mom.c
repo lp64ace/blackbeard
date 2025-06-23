@@ -62,7 +62,7 @@ void *mom_module_set_address(ModuleHandle *handle, void *address) {
 		handle->real = (uintptr_t)address;
 	}
 
-	return handle->real;
+	return (void *)handle->real;
 }
 
 void *mom_module_get_address(ModuleHandle *handle) {
@@ -103,24 +103,24 @@ ListBase mom_module_relocations(ModuleHandle *handle) {
 	return handle->relocations;
 }
 
-const char *mom_module_export_name(const ModuleHandle *handle, const ModuleExport *exported) {
+const char *mom_module_export_name(ModuleHandle *handle, ModuleExport *exported) {
 	return (exported->expname[0]) ? exported->expname : NULL;
 }
 
-short mom_module_export_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+short mom_module_export_ordinal(ModuleHandle *handle, ModuleExport *exported) {
 	return (MOM_module_export_is_ordinal(handle, exported)) ? exported->ordinal : -1;
 }
 
-bool mom_module_export_is_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+bool mom_module_export_is_ordinal(ModuleHandle *handle, ModuleExport *exported) {
 	// If there is no export name then this is export by ordinal!
 	return (exported->expname[0] == '\0') ? true : false;
 }
 
-bool mom_module_export_is_forward(const ModuleHandle *handle, const ModuleExport *exported) {
+bool mom_module_export_is_forward(ModuleHandle *handle, ModuleExport *exported) {
 	return (exported->libname[0]) ? true : false;
 }
 
-bool mom_module_export_is_forward_by_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+bool mom_module_export_is_forward_by_ordinal(ModuleHandle *handle, ModuleExport *exported) {
 	if (MOM_module_export_is_forward(handle, exported)) {
 		// If there is no forward name then this is forward by ordinal!
 		return (exported->fwdname[0] == '\0') ? true : false;
@@ -128,41 +128,41 @@ bool mom_module_export_is_forward_by_ordinal(const ModuleHandle *handle, const M
 	return false;
 }
 
-const char *mom_module_export_forward_libname(const ModuleHandle *handle, const ModuleExport *exported) {
+const char *mom_module_export_forward_libname(ModuleHandle *handle, ModuleExport *exported) {
 	return (exported->libname[0]) ? exported->libname : NULL;
 }
 
-short mom_module_export_forward_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+short mom_module_export_forward_ordinal(ModuleHandle *handle, ModuleExport *exported) {
 	if (MOM_module_export_is_fowrard_by_ordinal(handle, exported)) {
 		return exported->fwdordinal;
 	}
 	return -1;
 }
 
-const char *mom_module_export_forward_name(const ModuleHandle *handle, const ModuleExport *exported) {
+const char *mom_module_export_forward_name(ModuleHandle *handle, ModuleExport *exported) {
 	if (MOM_module_export_is_forward(handle, exported)) {
 		return (exported->fwdname[0]) ? exported->fwdname : NULL;
 	}
 	return NULL;
 }
 
-bool mom_module_import_is_ordinal(const ModuleHandle *handle, const ModuleImport *imported) {
+bool mom_module_import_is_ordinal(ModuleHandle *handle, ModuleImport *imported) {
 	return (imported->expname[0] == '\0') ? true : false;
 }
 
-const char *mom_module_import_libname(const ModuleHandle *handle, const ModuleImport *imported) {
+const char *mom_module_import_libname(ModuleHandle *handle, ModuleImport *imported) {
 	return imported->libname;
 }
 
-const char *mom_module_import_expname(const ModuleHandle *handle, const ModuleImport *imported) {
+const char *mom_module_import_expname(ModuleHandle *handle, ModuleImport *imported) {
 	return (imported->expname[0]) ? imported->expname : NULL;
 }
 
-short mom_module_import_expordinal(const ModuleHandle *handle, const ModuleImport *imported) {
+short mom_module_import_expordinal(ModuleHandle *handle, ModuleImport *imported) {
 	return imported->expordinal;
 }
 
-eMomRelocationType mom_module_relocation_type(const ModuleHandle *handle, const ModuleRelocation *relocation) {
+eMomRelocationType mom_module_relocation_type(ModuleHandle *handle, ModuleRelocation *relocation) {
 	return relocation->type;
 }
 

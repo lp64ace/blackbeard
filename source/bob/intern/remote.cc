@@ -432,20 +432,20 @@ public:
 	}
 
 private:
-	EventHandle *evtlocal;
-	ProcessHandle *process;
-	ThreadHandle *thread;
+	EventHandle *evtlocal = NULL;
+	ProcessHandle *process = NULL;
+	ThreadHandle *thread = NULL;
 
 	asmjit::JitRuntime asmruntime;
 	asmjit::CodeHolder codeholder;
 
 	void *evtremote = NULL;
 
-	void *loop;
-	void *code;
-	void *user;
+	void *loop = NULL;
+	void *code = NULL;
+	void *user = NULL;
 
-	size_t offset;
+	size_t offset = 0;
 
 	ListBase params;
 };

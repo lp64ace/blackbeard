@@ -162,15 +162,14 @@ ListBase winmom_process_resolve_schema(const char *schemaname) {
 	return list;
 }
 
-HANDLE winmom_process_handle(const ProcessHandle *handle) {
+HANDLE winmom_process_handle(ProcessHandle *handle) {
 	return (HANDLE)handle->native;
 }
 
-LPVOID winmom_process_peb(const ProcessHandle *handle, PEB *peb) {
+LPVOID winmom_process_peb(ProcessHandle *handle, PEB *peb) {
 	PROCESS_BASIC_INFORMATION information;
 
-	HMODULE ntdll = LoadLibrary(_T("ntdll.dll"));
-	fnNtQueryInformationProcess _NtQueryInformationProcess = (fnNtQueryInformationProcess)GetProcAddress(ntdll, "NtQueryInformationProcess");
+	fnNtQueryInformationProcess _NtQueryInformationProcess = (fnNtQueryInformationProcess)winmom_resolve_proc("ntdll.dll", "NtQueryInformationProcess");
 	if (!NT_SUCCESS(_NtQueryInformationProcess(winmom_process_handle(handle), ProcessBasicInformation, &information, sizeof(information), NULL))) {
 		return false;
 	}
@@ -184,8 +183,7 @@ LPVOID winmom_process_peb(const ProcessHandle *handle, PEB *peb) {
 LPVOID winmom_current_peb(PEB *peb) {
 	PROCESS_BASIC_INFORMATION information;
 
-	HMODULE ntdll = LoadLibrary(_T("ntdll.dll"));
-	fnNtQueryInformationProcess _NtQueryInformationProcess = (fnNtQueryInformationProcess)GetProcAddress(ntdll, "NtQueryInformationProcess");
+	fnNtQueryInformationProcess _NtQueryInformationProcess = (fnNtQueryInformationProcess)winmom_resolve_proc("ntdll.dll", "NtQueryInformationProcess");
 	if (!NT_SUCCESS(_NtQueryInformationProcess(GetCurrentProcess(), ProcessBasicInformation, &information, sizeof(information), NULL))) {
 		return false;
 	}
@@ -219,7 +217,7 @@ ListBase winmom_process_open_by_name(const char *name) {
 
 ProcessHandle *winmom_process_open(int identifier) {
 	ProcessHandle *handle = MEM_callocN(sizeof(ProcessHandle), "ProcessHandle");
-	handle->native = OpenProcess(0xFFFF, FALSE, identifier);
+	handle->native = (uintptr_t)OpenProcess(0xFFFF, FALSE, identifier);
 
 	do {
 		PEB peb;
@@ -255,7 +253,7 @@ ProcessHandle *winmom_process_open(int identifier) {
 
 			CHAR FullDllName[MAX_PATH * 4];
 			int MaxLength = WideCharToMultiByte(CP_ACP, 0, local.FullDllName.Buffer, local.FullDllName.MaximumLength, FullDllName, ARRAYSIZE(FullDllName), 0, NULL);
-			ModuleHandle *module = MOM_module_open_by_address(handle, local.DllBase, local.Reserved3[1]);
+			ModuleHandle *module = MOM_module_open_by_address(handle, local.DllBase, (size_t)local.Reserved3[1]);
 			if (module) {
 				memcpy(module->dllname, FullDllName, MaxLength);
 			}
@@ -272,13 +270,13 @@ ProcessHandle *winmom_process_self(void) {
 	return winmom_process_open(GetCurrentProcessId());
 }
 
-void *winmom_process_allocate(ProcessHandle *handle, const void *address, size_t length, int protect) {
+void *winmom_process_allocate(ProcessHandle *handle, void *address, size_t length, int protect) {
 	DWORD native = winmom_process_protection_to_native(protect);
 
 	return VirtualAllocEx(winmom_process_handle(handle), address, length, MEM_COMMIT | MEM_RESERVE, native);
 }
 
-bool winmom_process_protect(ProcessHandle *handle, const void *address, size_t length, int protect) {
+bool winmom_process_protect(ProcessHandle *handle, void *address, size_t length, int protect) {
 	DWORD native = winmom_process_protection_to_native(protect);
 	DWORD oldnative;
 
@@ -322,11 +320,11 @@ void winmom_process_close(ProcessHandle *handle) {
 	MEM_SAFE_FREE(handle);
 }
 
-int winmom_process_identifier(const ProcessHandle *handle) {
+int winmom_process_identifier(ProcessHandle *handle) {
 	return GetProcessId(winmom_process_handle(handle));
 }
 
-ModuleHandle *winmom_process_module_push(ProcessHandle *handle, ModuleHandle *module) {
+ModuleHandle *winmom_process_module_push(ProcessHandle *handle, const ModuleHandle *module) {
 	if (MOM_module_name(module)) {
 		ListBase duplicates = MOM_module_open_by_file(MOM_module_name(module));
 
@@ -347,7 +345,7 @@ ModuleHandle *winmom_process_module_push(ProcessHandle *handle, ModuleHandle *mo
 	return NULL;
 }
 
-ModuleHandle *winmom_process_module_find(ProcessHandle *handle, ModuleHandle *module) {
+ModuleHandle *winmom_process_module_find(ProcessHandle *handle, const ModuleHandle *module) {
 	LISTBASE_FOREACH(ModuleHandle *, itr, &handle->modules) {
 		if (MOM_module_name(module)) {
 			if (strcmp(MOM_module_name(module), MOM_module_name(itr)) == 0) {
@@ -408,5 +406,19 @@ fnMOM_process_identifier MOM_process_identifier = winmom_process_identifier;
 fnMOM_process_module_push MOM_process_module_push = winmom_process_module_push;
 fnMOM_process_module_find MOM_process_module_find = winmom_process_module_find;
 fnMOM_process_module_find_by_name MOM_process_module_find_by_name = winmom_process_module_find_by_name;
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Platform Internals
+ * { */
+
+void *winmom_resolve_proc(const char *dllname, const char *procname) {
+	HMODULE module;
+	if ((module = LoadLibraryA(dllname))) {
+		return GetProcAddress(module, procname);
+	}
+	return NULL;
+}
 
 /** \} */

@@ -215,9 +215,9 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	void *base = ((flag & kBobRebaseAlways) == 0) ? (void *)MOM_module_get_base(handle) : NULL;
 
 	void *real = NULL;
-	if (!(real = (uintptr_t)MOM_process_allocate(process, base, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
+	if (!(real = MOM_process_allocate(process, base, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
 		// The PE has a base address that likes to be mapped to, but if relocation data are present we can map it elsewhere!
-		if (!(real = (uintptr_t)MOM_process_allocate(process, NULL, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
+		if (!(real = MOM_process_allocate(process, NULL, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
 			return NULL;
 		}
 	}

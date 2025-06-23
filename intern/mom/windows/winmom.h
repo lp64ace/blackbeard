@@ -66,10 +66,18 @@ typedef NTSTATUS(NTAPI *fnNtCreateThreadEx)(OUT PHANDLE ThreadHandle, IN ACCESS_
 /** \} */
 
 /* -------------------------------------------------------------------- */
+/** \name Platform Internals
+ * { */
+
+void *winmom_resolve_proc(const char *dllname, const char *procname);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
 /** \name Module Platform Dependent
  * { */
 
-HMODULE winmom_module_handle(const struct ModuleHandle *handle);
+HMODULE winmom_module_handle(struct ModuleHandle *handle);
 
 bool winmom_module_loaded_match_name(const char *asbolute, const char *name);
 
@@ -81,8 +89,8 @@ bool winmom_module_loaded_match_name(const char *asbolute, const char *name);
 
 ListBase winmom_process_resolve_schema(const char *logical);
 
-HANDLE winmom_process_handle(const struct ProcessHandle *handle);
-LPVOID winmom_process_peb(const struct ProcessHandle *handle, PEB *peb);
+HANDLE winmom_process_handle(struct ProcessHandle *handle);
+LPVOID winmom_process_peb(struct ProcessHandle *handle, PEB *peb);
 LPVOID winmom_current_peb(PEB *peb);
 
 /** \} */
