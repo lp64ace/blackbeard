@@ -357,11 +357,9 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	 * \note In order to add TLS we need to have a testdll that has that...!
 	 */
 
-	eMomArchitecture architecture = MOM_module_architecture(handle);
-
 	bool install = true;
 
-	RemoteWorker *worker = BOB_remote_worker_open(process, architecture);
+	RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
 	if (worker) {
 		if (MOM_module_manifest_logical(handle)) {
 			if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
@@ -373,7 +371,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			install &= false; // When this happens sometimes the remote process crashes!
 		}
 
-		if (!BOB_remote_call_entry(worker, real, MOM_module_entry_physical(handle), architecture)) {
+		if (!BOB_remote_call_entry(worker, real, MOM_module_entry_physical(handle))) {
 			install &= false; // When this happens sometimes the remote process crashes!
 		}
 

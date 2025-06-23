@@ -117,6 +117,7 @@ typedef struct ModuleHandle {
 	ListBase relocations;
 	ListBase tls;
 
+	uintptr_t cookie;
 	uintptr_t exceptions;
 	uintptr_t manifest_begin;
 	uintptr_t manifest_end;

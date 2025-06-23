@@ -16,3 +16,9 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
 set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static")
 set(CMAKE_MODULE_LINKER_FLAGS "${CMAKE_MODULE_LINKER_FLAGS} -static")
+
+add_compile_options(-Wno-incompatible-function-pointer-types)
+add_compile_definitions(_POSIX_SEM_VALUE_MAX=32767)
+
+set(DATATOC_EXECUTABLE /usr/local/bin/datatoc)
+set(DATATOC_CROSSCOMPILE 1)

@@ -54,17 +54,36 @@ add_library(bob::source::bob ALIAS bob)
 # -----------------------------------------------------------------------------
 # Build Resources
 
-add_custom_command(
-	OUTPUT
-		${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
-	COMMAND
-		${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}
-	COMMAND
-		"$<TARGET_FILE:datatoc>" --src "$<TARGET_FILE:testdll1>" --bin ${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
-	DEPENDS
-		webz::tools::testdll1
-		webz::source::datatoc
-)
+if (NOT DATATOC_EXECUTABLE)
+	add_custom_command(
+		OUTPUT
+			${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
+		COMMAND
+			${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND
+			"$<TARGET_FILE:datatoc>" --src "$<TARGET_FILE:testdll1>" --bin ${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
+		DEPENDS
+			testdll1
+			datatoc
+	)
+else()
+	add_custom_command(
+		OUTPUT
+			${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
+		COMMAND
+			${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}
+		COMMAND
+			${DATATOC_EXECUTABLE} --src "$<TARGET_FILE:testdll1>" --bin ${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
+		DEPENDS
+			testdll1
+	)
+
+endif()
+
+if (DATATOC_CROSSCOMPILE)
+	add_compile_definitions(datatoc_testdll1_dll=datatoc_libtestdll1_dll)
+	add_compile_definitions(datatoc_testdll1_dll_size=datatoc_libtestdll1_dll_size)
+endif()
 
 # -----------------------------------------------------------------------------
 # Define Include Directories (Test)

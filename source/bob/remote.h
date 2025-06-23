@@ -81,7 +81,7 @@ bool BOB_remote_unbind_manifest(struct RemoteWorker *worker);
 
 bool BOB_remote_build_seh(struct RemoteWorker *worker, void *real, void *seh, size_t count);
 void *BOB_remote_load_dep(struct RemoteWorker *worker, ModuleHandle *handle);
-bool BOB_remote_call_entry(struct RemoteWorker *worker, void *real, void *entry, eMomArchitecture architecture);
+bool BOB_remote_call_entry(struct RemoteWorker *worker, void *real, void *entry);
 
 /** \} */
 

@@ -21,7 +21,6 @@ set(SRC
 
 set(LIB
 	# Internal Library Dependencies
-	bob::intern::guardedalloc
 	
 	# External Library Dependencies
 	

@@ -310,3 +310,18 @@ size_t LIB_listbase_count(const ListBase *lb) {
 }
 
 /** \} */
+
+
+bool LIB_listbase_is_empty(const ListBase *listbase) {
+	return (listbase->first == NULL && listbase->first == listbase->last);
+}
+
+bool LIB_listbase_is_single(const ListBase *listbase) {
+	return (listbase->first && listbase->first == listbase->last);
+}
+
+void LIB_listbase_clear(ListBase *listbase) {
+	listbase->first = listbase->last = NULL;
+}
+
+
