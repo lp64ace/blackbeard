@@ -28,6 +28,7 @@ set(SRC
 )
 
 set(SRC_WIN
+	windows/winevent.c
 	windows/winmodule.c
 	windows/winmom.h
 	windows/winprocess.c

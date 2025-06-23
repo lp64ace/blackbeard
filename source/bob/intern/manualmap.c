@@ -193,6 +193,12 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	if ((flag & kBobDependency) != 0) {
 		RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
 
+		/**
+		 * Dependency modules are usually official PE like ucrtbased.dll!
+		 * These are 'legit' portable executables but it would be nice to manual map these too!
+		 * TODO?
+		 */
+
 		void *real = NULL;
 		if ((real = BOB_remote_load_dep(worker, handle))) {
 			MOM_module_set_address(handle, real);
@@ -218,7 +224,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 	MOM_module_set_address(handle, real);
 
-	fprintf(stdout, "[BOB] module %s address BEGIN 0x%p END 0x%p\n", MOM_module_name(handle) ? MOM_module_name(handle) : "(null)", real, POINTER_OFFSET(real, size));
+	// fprintf(stdout, "[BOB] module %s address BEGIN 0x%p END 0x%p\n", MOM_module_name(handle) ? MOM_module_name(handle) : "(null)", real, POINTER_OFFSET(real, size));
 
 	ListBase sections = MOM_module_sections(handle);
 
@@ -257,11 +263,11 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), MOM_module_import_expname(handle, imported), 8);
 		}
 
-		if (MOM_module_import_expname(handle, imported)) {
-			fprintf(stdout, "[BOB] %s import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
-		} else {
-			fprintf(stdout, "[BOB] %s import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
-		}
+		// if (MOM_module_import_expname(handle, imported)) {
+		// 	fprintf(stdout, "[BOB] %s import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
+		// } else {
+		// 	fprintf(stdout, "[BOB] %s import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
+		// }
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
 
@@ -288,11 +294,11 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), MOM_module_import_expname(handle, imported), 8);
 		}
 
-		if (MOM_module_import_expname(handle, imported)) {
-			fprintf(stdout, "[BOB] %s delayed import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
-		} else {
-			fprintf(stdout, "[BOB] %s delayed import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
-		}
+		// if (MOM_module_import_expname(handle, imported)) {
+		// 			fprintf(stdout, "[BOB] %s delayed import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
+		// } else {
+		// 			fprintf(stdout, "[BOB] %s delayed import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
+		// }
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
 
@@ -329,9 +335,9 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		}
 	}
 
-	fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
-	fprintf(stdout, "%s\n", (const char *)MOM_module_manifest_logical(handle));
-	fprintf(stdout, "[BOB] Manifest END--------------------------------------------------------------\n");
+	// fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
+	// fprintf(stdout, "%s\n", (const char *)MOM_module_manifest_logical(handle));
+	// fprintf(stdout, "[BOB] Manifest END--------------------------------------------------------------\n");
 
 	/**
 	 * Protection needs to be updated as well so that some sections are read-only or executable!
@@ -347,7 +353,8 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	}
 
 	/**
-	 * TODO: Move these the fuck out of here! (move to remote.cc)
+	 * TODO: Add TLS
+	 * \note In order to add TLS we need to have a testdll that has that...!
 	 */
 
 	eMomArchitecture architecture = MOM_module_architecture(handle);
@@ -358,12 +365,12 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	if (worker) {
 		if (MOM_module_manifest_logical(handle)) {
 			if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
-				install &= false;
+				install &= false; // When this happens sometimes the remote process crashes!
 			}
 		}
 
 		if (!BOB_remote_build_seh(worker, real, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
-			install &= false;
+			install &= false; // When this happens sometimes the remote process crashes!
 		}
 
 		if (!BOB_remote_call_entry(worker, real, MOM_module_entry_physical(handle), architecture)) {

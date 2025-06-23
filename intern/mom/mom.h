@@ -42,7 +42,21 @@ extern "C" {
 #define MOM_MAX_LIBNAME_LEN 256
 
 /* -------------------------------------------------------------------- */
-/** \name Datablock Definitions
+/** \name Architecture
+ * { */
+
+typedef enum eMomArchitecture {
+	kMomArchitectureNone,
+	kMomArchitectureAmd32,
+	kMomArchitectureAmd64,
+} eMomArchitecture;
+
+size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Modules
  * { */
 
 typedef struct ModuleHandle ModuleHandle;
@@ -52,26 +66,6 @@ typedef struct ModuleImport ModuleImport;
 typedef struct ModuleRelocation ModuleRelocation;
 typedef struct ModuleTLS ModuleTLS;
 typedef struct ModuleException ModuleException;
-
-typedef enum eMomArchitecture {
-	kMomArchitectureNone,
-	kMomArchitectureAmd32,
-	kMomArchitectureAmd64,
-} eMomArchitecture;
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Architecture
- * { */
-
-size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Modules
- * { */
 
 typedef ListBase (*fnMOM_module_open_by_file)(const char *filepath);
 typedef ListBase (*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
@@ -266,7 +260,7 @@ typedef ModuleHandle *(*fnMOM_process_module_find)(struct ProcessHandle *process
 extern fnMOM_process_open_by_name MOM_process_open_by_name;
 extern fnMOM_process_open MOM_process_open;
 extern fnMOM_process_self MOM_process_self;
-extern fnMOM_process_native MOM_process_native;
+extern fnMOM_process_native MOM_process_native; // TODO remove!
 extern fnMOM_process_allocate MOM_process_allocate;
 extern fnMOM_process_protect MOM_process_protect;
 extern fnMOM_process_write MOM_process_write;
@@ -292,6 +286,7 @@ typedef struct ThreadHandle ThreadHandle;
 typedef struct ThreadHandle *(*fnMOM_thread_open)(int identifier);
 typedef struct ThreadHandle *(*fnMOM_thread_spawn)(struct ProcessHandle *process, void *entry, void *param);
 typedef void (*fnMOM_thread_close)(struct ThreadHandle *handle);
+typedef bool (*fnMOM_thread_queue_apc)(struct ThreadHandle *handle, void *procedure, void *argument);
 typedef bool (*fnMOM_thread_terminate)(struct ThreadHandle *handle, int code);
 typedef bool (*fnMOM_thread_join)(struct ThreadHandle *handle);
 typedef bool (*fnMOM_thread_suspend)(struct ThreadHandle *handle);
@@ -301,11 +296,37 @@ typedef int (*fnMOM_thread_identifier)(const struct ThreadHandle *handle);
 extern fnMOM_thread_open MOM_thread_open;
 extern fnMOM_thread_spawn MOM_thread_spawn;
 extern fnMOM_thread_close MOM_thread_close;
+extern fnMOM_thread_queue_apc MOM_thread_queue_apc;
 extern fnMOM_thread_terminate MOM_thread_terminate;
 extern fnMOM_thread_join MOM_thread_join;
 extern fnMOM_thread_suspend MOM_thread_suspend;
 extern fnMOM_thread_resume MOM_thread_resume;
 extern fnMOM_thread_identifier MOM_thread_identifier;
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Event
+ * { */
+
+typedef struct EventHandle EventHandle;
+
+typedef EventHandle *(*fnMOM_event_open)(const char *name);
+typedef void (*fnMOM_event_close)(struct EventHandle *event);
+
+// The result is like a file-descriptor for native usage! (Owned by this process)
+typedef void *(*fnMOM_event_native)(const struct EventHandle *event);
+// The result is like a file-descriptor for native usage! (Owned by the remote process)
+typedef void *(*fnMOM_event_share)(const struct EventHandle *event, struct ProcessHandle *remote);
+typedef void (*fnMOM_event_reset)(struct EventHandle *event);
+typedef bool (*fnMOM_event_wait)(struct EventHandle *event, int ms);
+
+extern fnMOM_event_open MOM_event_open;
+extern fnMOM_event_close MOM_event_close;
+extern fnMOM_event_native MOM_event_native;
+extern fnMOM_event_share MOM_event_share;
+extern fnMOM_event_reset MOM_event_reset;
+extern fnMOM_event_wait MOM_event_wait;
 
 /** \} */
 

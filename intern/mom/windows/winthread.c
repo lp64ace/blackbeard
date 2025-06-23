@@ -44,6 +44,12 @@ void winmom_thread_close(ThreadHandle *handle) {
 	CloseHandle(winmom_thread_handle(handle));
 }
 
+bool winmom_thread_queue_apc(ThreadHandle *handle, void *procedure, void *argument) {
+	QueueUserAPC(procedure, winmom_thread_handle(handle), argument);
+
+	return true;
+}
+
 bool winmom_thread_terminate(ThreadHandle *handle, int code) {
 	return TerminateThread(winmom_thread_handle(handle), code);
 }
@@ -73,6 +79,7 @@ bool winmom_thread_join(ThreadHandle *handle) {
 fnMOM_thread_open MOM_thread_open = winmom_thread_open;
 fnMOM_thread_spawn MOM_thread_spawn = winmom_thread_spawn;
 fnMOM_thread_close MOM_thread_close = winmom_thread_close;
+fnMOM_thread_queue_apc MOM_thread_queue_apc = winmom_thread_queue_apc;
 fnMOM_thread_terminate MOM_thread_terminate = winmom_thread_terminate;
 fnMOM_thread_join MOM_thread_join = winmom_thread_join;
 fnMOM_thread_suspend MOM_thread_suspend = winmom_thread_suspend;

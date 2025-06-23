@@ -9,10 +9,6 @@
 #include "x86.h"
 #include "a64.h"
 
-#include <windows.h>
-#include <winternl.h>
-#include <tchar.h>
-
 #ifndef min
 #	define min(a, b) (((a) < (b)) ? (a) : (b))
 #endif
@@ -301,10 +297,10 @@ public:
 		asmjit::CodeHolder codeholder;
 		codeholder.init(this->codeholder.environment(), this->asmruntime.cpuFeatures());
 
-		if (!(this->evtlocal = CreateEventW(NULL, TRUE, FALSE, NULL))) {
+		if (!(this->evtlocal = MOM_event_open(NULL))) {
 			return false;
 		}
-		if (!DuplicateHandle(GetCurrentProcess(), this->evtlocal, MOM_process_native(this->process), &this->evtremote, 0, FALSE, DUPLICATE_SAME_ACCESS)) {
+		if (!(this->evtremote = (void *)MOM_event_share(this->evtlocal, this->process))) {
 			return false;
 		}
 
@@ -322,7 +318,7 @@ public:
 		ASM.bind(loop);
 		{
 			push(0x05, kBobNoDeref);
-			push(TRUE, kBobNoDeref);
+			push(0x01, kBobNoDeref);
 			call(ASM, _SleepEx);
 		}
 		ASM.jmp(loop);
@@ -422,11 +418,11 @@ public:
 	uint64_t invoke(void *argument) {
 		void *code;
 		if ((code = this->make())) {
-			QueueUserAPC(reinterpret_cast<PAPCFUNC>(code), reinterpret_cast<HANDLE>(thread), reinterpret_cast<ULONG_PTR>(argument));
-			if (WaitForSingleObject(evtlocal, 3000) != WAIT_OBJECT_0) {
+			MOM_thread_queue_apc(thread, code, argument);
+			if (!MOM_event_wait(evtlocal, 3000)) {
 				// return 0;
 			}
-			ResetEvent(evtlocal);
+			MOM_event_reset(this->evtlocal);
 
 			uint64_t ret;
 			MOM_process_read(this->process, this->ptrsave(0), &ret, sizeof(ret));
@@ -436,14 +432,14 @@ public:
 	}
 
 private:
+	EventHandle *evtlocal;
 	ProcessHandle *process;
 	ThreadHandle *thread;
 
 	asmjit::JitRuntime asmruntime;
 	asmjit::CodeHolder codeholder;
 
-	HANDLE evtlocal = INVALID_HANDLE_VALUE;
-	HANDLE evtremote = INVALID_HANDLE_VALUE;
+	void *evtremote = NULL;
 
 	void *loop;
 	void *code;
@@ -574,6 +570,11 @@ void BOB_remote_breakpoint(RemoteWorker *worker) {
 /** \name Common Routines
  * \{ */
 
+#ifdef WIN32
+
+#include <windows.h>
+#include <tchar.h>
+
 void *BOB_remote_write_manifest(RemoteWorker *worker, const void *vmanifest, size_t size) {
 	TCHAR directory[MAX_PATH], filename[MAX_PATH];
 	GetTempPath(ARRAYSIZE(directory), directory);
@@ -597,7 +598,7 @@ void *BOB_remote_write_manifest(RemoteWorker *worker, const void *vmanifest, siz
 bool BOB_remote_build_manifest(RemoteWorker *vworker, const void *vmanifest, size_t size) {
 	RemoteWorkerImplementation *worker = unwrap(vworker);
 
-	HANDLE manifest;
+	void *manifest = NULL;
 	if (!MOM_process_read(worker->host(), worker->ptrmanifest(), &manifest, sizeof(manifest))) {
 		return false;
 	}
@@ -620,7 +621,6 @@ bool BOB_remote_build_manifest(RemoteWorker *vworker, const void *vmanifest, siz
 		BOB_remote_end64(vworker);
 
 		if (!(manifest = (HANDLE)BOB_remote_exec(vworker, NULL))) {
-			fprintf(stdout, "[BOB] 0x%p << CreateActCtx\n", manifest);
 			return false;
 		}
 
@@ -635,7 +635,7 @@ bool BOB_remote_build_manifest(RemoteWorker *vworker, const void *vmanifest, siz
 bool BOB_remote_bind_manifest(RemoteWorker *vworker) {
 	RemoteWorkerImplementation *worker = unwrap(vworker);
 
-	HANDLE manifest;
+	void *manifest = NULL;
 	if (!MOM_process_read(worker->host(), worker->ptrmanifest(), &manifest, sizeof(manifest))) {
 		return false;
 	}
@@ -659,7 +659,7 @@ bool BOB_remote_bind_manifest(RemoteWorker *vworker) {
 bool BOB_remote_unbind_manifest(RemoteWorker *vworker) {
 	RemoteWorkerImplementation *worker = unwrap(vworker);
 
-	HANDLE manifest;
+	void *manifest = NULL;
 	if (!MOM_process_read(worker->host(), worker->ptrmanifest(), &manifest, sizeof(manifest))) {
 		return false;
 	}
@@ -700,7 +700,7 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, void *real, void *seh, size_t c
 		return false;
 	}
 
-	fprintf(stdout, "[BOB] 0x%p << RtlAddFunctionTable\n", (void *)BOB_remote_saved(vworker, 0));
+	// fprintf(stdout, "[BOB] 0x%p << RtlAddFunctionTable\n", (void *)BOB_remote_saved(vworker, 0));
 
 	return true;
 }
@@ -720,7 +720,7 @@ void *BOB_remote_load_dep(RemoteWorker *vworker, ModuleHandle *handle) {
 	BOB_remote_begin64(vworker);
 
 	// RtlInitUnicodeString
-	void *UnicodeString = BOB_remote_push_ex(vworker, NULL, sizeof(UNICODE_STRING));
+	void *UnicodeString = BOB_remote_push_ex(vworker, NULL, 0x20);
 	BOB_remote_push_wide(vworker, fullpath);
 	BOB_remote_call(vworker, kBobWin64, _RtlInitUnicodeString);
 
@@ -735,11 +735,9 @@ void *BOB_remote_load_dep(RemoteWorker *vworker, ModuleHandle *handle) {
 
 	BOB_remote_end64(vworker);
 
-	if (!NT_SUCCESS(BOB_remote_exec(vworker, NULL))) {
+	if (BOB_remote_exec(vworker, NULL)) {
 		return NULL;
 	}
-
-	fprintf(stdout, "[BOB] 0x%p << LdrLoadDll\n", (void *)BOB_remote_saved(vworker, 0));
 
 	HMODULE module;
 	if (!MOM_process_read(worker->host(), Module, &module, sizeof(module))) {
@@ -766,8 +764,6 @@ bool BOB_remote_call_entry(RemoteWorker *worker, void *real, void *entry, eMomAr
 			if (!BOB_remote_exec(worker, NULL)) {
 				return false;
 			}
-
-			fprintf(stdout, "[BOB] 0x%p << Entry\n", (void *)BOB_remote_saved(worker, 0));
 		} break;
 		case kMomArchitectureAmd64: {
 			BOB_remote_begin64(worker);
@@ -784,14 +780,12 @@ bool BOB_remote_call_entry(RemoteWorker *worker, void *real, void *entry, eMomAr
 			if (!BOB_remote_exec(worker, NULL)) {
 				return false;
 			}
-
-			fprintf(stdout, "[BOB] 0x%p << ActivateActCtx\n", (void *)BOB_remote_saved(worker, 1));
-			fprintf(stdout, "[BOB] 0x%p << Entry\n", (void *)BOB_remote_saved(worker, 0));
-			fprintf(stdout, "[BOB] 0x%p << DeativateActCtx\n", (void *)BOB_remote_saved(worker, 2));
 		} break;
 	}
 
 	return true;
 }
+
+#endif
 
 /** \} */
