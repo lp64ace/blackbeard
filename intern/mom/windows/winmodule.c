@@ -527,6 +527,18 @@ static bool winmom_module_resolve_manifest(ModuleHandle *handle) {
 	return true;
 }
 
+static bool winmom_module_resolve_cookie(ModuleHandle *handle) {
+	IMAGE_LOAD_CONFIG_DIRECTORY *directory = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_LOAD_CONFIG);
+	
+	if (!directory) {
+		return true;
+	}
+	
+	handle->cookie = directory->SecurityCookie;
+	
+	return true;
+}
+
 static bool winmom_module_resolve(ModuleHandle *handle) {
 	if (!winmom_module_resolve_sections(handle)) {
 		return false;
@@ -547,6 +559,9 @@ static bool winmom_module_resolve(ModuleHandle *handle) {
 		return false;
 	}
 	if (!winmom_module_resolve_manifest(handle)) {
+		return false;
+	}
+	if (!winmom_module_resolve_cookie(handle)) {
 		return false;
 	}
 	return true;
@@ -921,6 +936,14 @@ void *winmom_module_entry_physical(ModuleHandle *handle) {
 	return 0;
 }
 
+void *winmom_module_cookie_logical(ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_image(handle, handle->cookie);
+}
+
+void *winmom_module_cookie_physical(ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_memory(handle, handle->cookie);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -967,5 +990,8 @@ fnMOM_module_manifest_physical MOM_module_manifest_physical = winmom_module_mani
 
 fnMOM_module_entry_logical MOM_module_entry_logical = winmom_module_entry_logical;
 fnMOM_module_entry_physical MOM_module_entry_physical = winmom_module_entry_physical;
+
+fnMOM_module_cookie_logical MOM_module_cookie_logical = winmom_module_cookie_logical;
+fnMOM_module_cookie_physical MOM_module_cookie_physical = winmom_module_cookie_physical;
 
 /** \} */

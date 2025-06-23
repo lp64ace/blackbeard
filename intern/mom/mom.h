@@ -148,6 +148,10 @@ typedef void *(*fnMOM_module_entry_logical)(struct ModuleHandle *handle);
 // Even if this doesn't return NULL the return address may not be owned by this process!
 typedef void *(*fnMOM_module_entry_physical)(struct ModuleHandle *handle);
 
+typedef void *(*fnMOM_module_cookie_logical)(struct ModuleHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_cookie_physical)(struct ModuleHandle *handle);
+
 // This can return a collection of modules when the name exists in the schema API
 extern fnMOM_module_open_by_file MOM_module_open_by_file;
 // This can return a collection of modules when the name exists in the schema API
@@ -223,6 +227,10 @@ extern fnMOM_module_manifest_physical MOM_module_manifest_physical;
 extern fnMOM_module_entry_logical MOM_module_entry_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
 extern fnMOM_module_entry_physical MOM_module_entry_physical;
+
+extern fnMOM_module_cookie_logical MOM_module_cookie_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_cookie_physical MOM_module_cookie_physical;
 
 /** \} */
 
