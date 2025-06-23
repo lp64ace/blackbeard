@@ -189,7 +189,7 @@ set(LIB
 # -----------------------------------------------------------------------------
 # Declare Library
 
-webz_add_lib(asmjit "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
-add_library(webz::extern::asmjit ALIAS asmjit)
+bob_add_lib(asmjit "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
+add_library(bob::extern::asmjit ALIAS asmjit)
 
 # TODO I do not like this abomination of a library make prebuilt binaries!
