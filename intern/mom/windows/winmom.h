@@ -51,6 +51,15 @@ extern "C" {
 /** \name Datablock Definitions
  * { */
 
+typedef struct SchemaEntry {
+	struct SchemaEntry *perv, *next;
+
+	/**
+	 * These are the entries so we do not care about the logical names!
+	 */
+	char physical[MOM_MAX_DLLNAME_LEN];
+} SchemaEntry;
+
 typedef NTSTATUS(NTAPI *fnNtQueryInformationProcess)(IN HANDLE ProcessHandle, IN PROCESSINFOCLASS ProcessInformationClass, OUT PVOID ProcessInformation, IN ULONG ProcessInformationLength, OUT PULONG ReturnLength OPTIONAL);
 
 /** \} */
@@ -61,11 +70,15 @@ typedef NTSTATUS(NTAPI *fnNtQueryInformationProcess)(IN HANDLE ProcessHandle, IN
 
 HMODULE winmom_module_handle(const struct ModuleHandle *handle);
 
+bool winmom_module_loaded_match_name(const char *asbolute, const char *name);
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Process Platform Dependent
  * { */
+
+ListBase winmom_process_resolve_schema(const char *logical);
 
 HANDLE winmom_process_handle(const struct ProcessHandle *handle);
 LPVOID winmom_process_peb(const struct ProcessHandle *handle, PEB *peb);

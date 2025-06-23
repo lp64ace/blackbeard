@@ -47,111 +47,123 @@ size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture) {
 /** \name Module
  * { */
 
-void mom_module_close_collection(ModuleHandle *handle) {
-	ModuleHandle *prev = handle->prev, *next = handle->next;
-
-	MOM_module_close(handle);
-
-	if (prev) {
-		prev->next = NULL;
-		mom_module_close_collection(prev);
-	}
-	if (next) {
-		next->prev = NULL;
-		mom_module_close_collection(next);
-	}
-}
-
-ModuleHandle *mom_module_prev(ModuleHandle *handle) {
-	return handle->next;
-}
-
-ModuleHandle *mom_module_next(ModuleHandle *handle) {
-	return handle->next;
-}
-
-const char *mom_module_name(ModuleHandle *handle) {
+const char *mom_module_name(const ModuleHandle *handle) {
 	return (handle->dllname[0]) ? handle->dllname : NULL;
 }
 
-ModuleSection *mom_module_section_end(ModuleHandle *handle) {
+void *mom_module_set_address(ModuleHandle *handle, void *address) {
+	// This should not be changed for already loaded by address modules!
+	// assert(!handle->real);
+
+	/**
+	 * This is used to retrieve the physical address of virtual addresses!
+	 */
+	if (!handle->real) {
+		handle->real = (uintptr_t)address;
+	}
+
+	return handle->real;
+}
+
+void *mom_module_get_address(ModuleHandle *handle) {
+	return (void *)handle->real;
+}
+
+void *mom_module_get_base(ModuleHandle *handle) {
+	return (void *)handle->base;
+}
+
+void mom_module_close_collection(ListBase *collection) {
+	LISTBASE_FOREACH_MUTABLE(ModuleHandle *, module, collection) {
+		MOM_module_close(module);
+	}
+}
+
+ListBase mom_module_sections(ModuleHandle *handle) {
+	return handle->sections;
+}
+
+ListBase mom_module_exports(ModuleHandle *handle) {
+	return handle->exports;
+}
+
+ListBase mom_module_imports(ModuleHandle *handle) {
+	return handle->imports;
+}
+
+ListBase mom_module_imports_delayed(ModuleHandle *handle) {
+	return handle->imports_delayed;
+}
+
+ListBase mom_module_tls(ModuleHandle *handle) {
+	return handle->tls;
+}
+
+ListBase mom_module_relocations(ModuleHandle *handle) {
+	return handle->relocations;
+}
+
+const char *mom_module_export_name(const ModuleHandle *handle, const ModuleExport *exported) {
+	return (exported->expname[0]) ? exported->expname : NULL;
+}
+
+short mom_module_export_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+	return (MOM_module_export_is_ordinal(handle, exported)) ? exported->ordinal : -1;
+}
+
+bool mom_module_export_is_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+	// If there is no export name then this is export by ordinal!
+	return (exported->expname[0] == '\0') ? true : false;
+}
+
+bool mom_module_export_is_forward(const ModuleHandle *handle, const ModuleExport *exported) {
+	return (exported->libname[0]) ? true : false;
+}
+
+bool mom_module_export_is_forward_by_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+	if (MOM_module_export_is_forward(handle, exported)) {
+		// If there is no forward name then this is forward by ordinal!
+		return (exported->fwdname[0] == '\0') ? true : false;
+	}
+	return false;
+}
+
+const char *mom_module_export_forward_libname(const ModuleHandle *handle, const ModuleExport *exported) {
+	return (exported->libname[0]) ? exported->libname : NULL;
+}
+
+short mom_module_export_forward_ordinal(const ModuleHandle *handle, const ModuleExport *exported) {
+	if (MOM_module_export_is_fowrard_by_ordinal(handle, exported)) {
+		return exported->fwdordinal;
+	}
+	return -1;
+}
+
+const char *mom_module_export_forward_name(const ModuleHandle *handle, const ModuleExport *exported) {
+	if (MOM_module_export_is_forward(handle, exported)) {
+		return (exported->fwdname[0]) ? exported->fwdname : NULL;
+	}
 	return NULL;
 }
 
-ModuleSection *mom_module_section_next(ModuleHandle *handle, ModuleSection *section) {
-	return (section) ? section->next : section;
+bool mom_module_import_is_ordinal(const ModuleHandle *handle, const ModuleImport *imported) {
+	return (imported->expname[0] == '\0') ? true : false;
 }
 
-ModuleExport *mom_module_export_end(ModuleHandle *handle) {
-	return NULL;
+const char *mom_module_import_libname(const ModuleHandle *handle, const ModuleImport *imported) {
+	return imported->libname;
 }
 
-ModuleExport *mom_module_export_next(ModuleHandle *handle, ModuleExport *export) {
-	return (export) ? export->next : export;
+const char *mom_module_import_expname(const ModuleHandle *handle, const ModuleImport *imported) {
+	return (imported->expname[0]) ? imported->expname : NULL;
 }
 
-int mom_module_export_ordinal(const ModuleHandle *handle, const ModuleExport *export) {
-	return export->ordinal;
+short mom_module_import_expordinal(const ModuleHandle *handle, const ModuleImport *imported) {
+	return imported->expordinal;
 }
 
-int mom_module_export_forward_ordinal(const ModuleHandle *handle, const ModuleExport *export) {
-	return export->fwdordinal;
-}
-
-const char *mom_module_export_forward_name(const ModuleHandle *handle, const ModuleExport *export) {
-	return (export->fwdname[0]) ? export->fwdname : NULL;
-}
-
-const char *mom_module_export_name(const ModuleHandle *handle, const ModuleExport *export) {
-	return (export->expname[0]) ? export->expname : NULL;
-}
-
-const char *mom_module_export_lib(const ModuleHandle *handle, const ModuleExport *export) {
-	return (export->libname[0]) ? export->libname : NULL;
-}
-
-ModuleImport *mom_module_import_end(ModuleHandle *handle) {
-	return NULL;
-}
-
-ModuleImport *mom_module_import_next(ModuleHandle *handle, ModuleImport *import) {
-	return (import) ? import->next : import;
-}
-
-int mom_module_import_ordinal(const ModuleHandle *handle, const ModuleImport *import) {
-	return import->ordinal;
-}
-
-const char *mom_module_import_name(const ModuleHandle *handle, const ModuleImport *import) {
-	return (import->expname[0]) ? import->expname : NULL;
-}
-
-const char *mom_module_import_lib(const ModuleHandle *handle, const ModuleImport *import) {
-	return (import->libname[0]) ? import->libname : NULL;
-}
-
-ModuleImport *mom_module_import_delayed_end(ModuleHandle *handle) {
-	return NULL;
-}
-
-ModuleImport *mom_module_import_delayed_next(ModuleHandle *handle, ModuleImport *import) {
-	return (import) ? import->next : import;
-}
-
-ModuleTLS *mom_module_tls_end(ModuleHandle *handle) {
-	return NULL;
-}
-
-ModuleTLS *mom_module_tls_next(ModuleHandle *handle, ModuleTLS *itr) {
-	return (itr) ? itr->next : itr;
-}
-
-ModuleRelocation *mom_module_relocation_end(ModuleHandle *handle) {
-	return NULL;
-}
-
-ModuleRelocation *mom_module_relocation_next(ModuleHandle *handle, ModuleRelocation *itr) {
-	return (itr) ? itr->next : itr;
+eMomRelocationType mom_module_relocation_type(const ModuleHandle *handle, const ModuleRelocation *relocation) {
+	return relocation->type;
 }
 
 /** \} */
@@ -160,16 +172,10 @@ ModuleRelocation *mom_module_relocation_next(ModuleHandle *handle, ModuleRelocat
 /** \name Process
  * { */
 
-ModuleHandle *mom_process_module_begin(ProcessHandle *handle) {
-	return handle->modules.first;
-}
-
-ModuleHandle *mom_process_module_end(ProcessHandle *handle) {
-	return NULL;
-}
-
-ModuleHandle *mom_process_module_next(ProcessHandle *handle, ModuleHandle *itr) {
-	return (itr) ? itr->next : itr;
+void mom_process_close_collection(ListBase *collection) {
+	LISTBASE_FOREACH_MUTABLE(ProcessHandle *, process, collection) {
+		MOM_process_close(process);
+	}
 }
 
 /** \} */
@@ -178,33 +184,57 @@ ModuleHandle *mom_process_module_next(ProcessHandle *handle, ModuleHandle *itr) 
 /** \name Exports
  * { */
 
-fnMOM_module_close_collection MOM_module_close_collection = mom_module_close_collection;
-fnMOM_module_next MOM_module_prev = mom_module_prev;
-fnMOM_module_next MOM_module_next = mom_module_next;
 fnMOM_module_name MOM_module_name = mom_module_name;
-fnMOM_module_section_end MOM_module_section_end = mom_module_section_end;
-fnMOM_module_section_next MOM_module_section_next = mom_module_section_next;
-fnMOM_module_export_end MOM_module_export_end = mom_module_export_end;
-fnMOM_module_export_next MOM_module_export_next = mom_module_export_next;
+fnMOM_module_set_address MOM_module_set_address = mom_module_set_address;
+fnMOM_module_get_address MOM_module_get_address = mom_module_get_address;
+fnMOM_module_get_base MOM_module_get_base = mom_module_get_base;
+
+fnMOM_module_close_collection MOM_module_close_collection = mom_module_close_collection;
+fnMOM_module_sections MOM_module_sections = mom_module_sections;
+fnMOM_module_exports MOM_module_exports = mom_module_exports;
+fnMOM_module_imports MOM_module_imports = mom_module_imports;
+fnMOM_module_imports_delayed MOM_module_imports_delayed = mom_module_imports_delayed;
+fnMOM_module_tls MOM_module_tls = mom_module_tls;
+fnMOM_module_relocations MOM_module_relocations = mom_module_relocations;
+
+fnMOM_module_export_name MOM_module_export_name = mom_module_export_name;
 fnMOM_module_export_ordinal MOM_module_export_ordinal = mom_module_export_ordinal;
+fnMOM_module_export_is_ordinal MOM_module_export_is_ordinal = mom_module_export_is_ordinal;
+fnMOM_module_export_is_forward MOM_module_export_is_forward = mom_module_export_is_forward;
+fnMOM_module_export_is_fowrard_by_ordinal MOM_module_export_is_fowrard_by_ordinal = mom_module_export_is_forward_by_ordinal;
+fnMOM_module_export_forward_libname MOM_module_export_forward_libname = mom_module_export_forward_libname;
 fnMOM_module_export_forward_ordinal MOM_module_export_forward_ordinal = mom_module_export_forward_ordinal;
 fnMOM_module_export_forward_name MOM_module_export_forward_name = mom_module_export_forward_name;
-fnMOM_module_export_name MOM_module_export_name = mom_module_export_name;
-fnMOM_module_export_lib MOM_module_export_lib = mom_module_export_lib;
-fnMOM_module_import_end MOM_module_import_end = mom_module_import_end;
-fnMOM_module_import_next MOM_module_import_next = mom_module_import_next;
-fnMOM_module_import_ordinal MOM_module_import_ordinal = mom_module_import_ordinal;
-fnMOM_module_import_name MOM_module_import_name = mom_module_import_name;
-fnMOM_module_import_lib MOM_module_import_lib = mom_module_import_lib;
-fnMOM_module_import_delayed_end MOM_module_import_delayed_end = mom_module_import_delayed_end;
-fnMOM_module_import_delayed_next MOM_module_import_delayed_next = mom_module_import_delayed_next;
-fnMOM_module_tls_end MOM_module_tls_end = mom_module_tls_end;
-fnMOM_module_tls_next MOM_module_tls_next = mom_module_tls_next;
-fnMOM_module_relocation_end MOM_module_relocation_end = mom_module_relocation_end;
-fnMOM_module_relocation_next MOM_module_relocation_next = mom_module_relocation_next;
 
-fnMOM_process_module_begin MOM_process_module_begin = mom_process_module_begin;
-fnMOM_process_module_end MOM_process_module_end = mom_process_module_end;
-fnMOM_process_module_next MOM_process_module_next = mom_process_module_next;
+ModuleExport *MOM_module_export_find_by_name(ModuleHandle *handle, const char *name) {
+	LISTBASE_FOREACH(ModuleExport *, exported, &handle->exports) {
+		if (!MOM_module_export_is_ordinal(handle, exported)) {
+			if (strcmp(MOM_module_export_name(handle, exported), name) == 0) {
+				return exported;
+			}
+		}
+	}
+	return NULL;
+}
+
+ModuleExport *MOM_module_export_find_by_ordinal(ModuleHandle *handle, short ordinal) {
+	LISTBASE_FOREACH(ModuleExport *, exported, &handle->exports) {
+		if (MOM_module_export_is_ordinal(handle, exported)) {
+			if (MOM_module_export_ordinal(handle, exported) == ordinal) {
+				return exported;
+			}
+		}
+	}
+	return NULL;
+}
+
+fnMOM_module_import_is_ordinal MOM_module_import_is_ordinal = mom_module_import_is_ordinal;
+fnMOM_module_import_libname MOM_module_import_libname = mom_module_import_libname;
+fnMOM_module_import_expname MOM_module_import_expname = mom_module_import_expname;
+fnMOM_module_import_expordinal MOM_module_import_expordinal = mom_module_import_expordinal;
+
+fnMOM_module_relocation_type MOM_module_relocation_type = mom_module_relocation_type;
+
+fnMOM_process_close_collection MOM_process_close_collection = mom_process_close_collection;
 
 /** \} */

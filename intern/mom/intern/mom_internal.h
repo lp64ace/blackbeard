@@ -38,6 +38,8 @@ extern "C" {
  * { */
 
 typedef struct ProcessHandle {
+	struct ProcessHandle *prev, *next;
+
 	ListBase modules;
 
 	// Native handle, this should probably be added into a private section?
@@ -62,17 +64,7 @@ typedef struct ProcessHandle {
 typedef struct ModuleSection {
 	struct ModuleSection *prev, *next;
 
-	uintptr_t src;
-	uintptr_t dst;
-
-	/**
-	 * The following can be used however the native implementation deems appropriate!
-	 * These are currently used by the Windows implementation!
-	 * 
-	 * \note In case the naming doesn't fit the purpose of both implementations, 
-	 * the name should be changed to something more generic like 'payload' or 'private'
-	 */
-	char header[];
+	const char private[];
 } ModuleSection;
 
 typedef struct ModuleExport {
@@ -83,33 +75,30 @@ typedef struct ModuleExport {
 	char expname[MOM_MAX_EXPNAME_LEN];
 	char fwdname[MOM_MAX_EXPNAME_LEN];
 	char libname[MOM_MAX_LIBNAME_LEN];
-	uintptr_t src;
-	uintptr_t dst;
+	uintptr_t va;
 } ModuleExport;
 
 typedef struct ModuleImport {
 	struct ModuleImport *prev, *next;
 
-	uintptr_t ordinal;
+	uintptr_t expordinal;
 	char expname[MOM_MAX_EXPNAME_LEN];
 	char libname[MOM_MAX_LIBNAME_LEN];
-	uintptr_t from;
-	uintptr_t to;
+	uintptr_t thunk_va;
+	uintptr_t funk_va;
 } ModuleImport;
 
 typedef struct ModuleTLS {
 	struct ModuleTLS *prev, *next;
 
-	uintptr_t src;
-	uintptr_t dst;
+	uintptr_t va;
 } ModuleTLS;
 
 typedef struct ModuleRelocation {
 	struct ModuleRelocation *prev, *next;
 
-	uintptr_t src;
-	uintptr_t dst;
 	eMomRelocationType type;
+	uintptr_t va;
 } ModuleRelocation;
 
 typedef struct ModuleHandle {
@@ -124,9 +113,9 @@ typedef struct ModuleHandle {
 	ListBase sections;
 	ListBase exports;
 	ListBase imports;
-	ListBase delayed_imports;
-	ListBase tls;
+	ListBase imports_delayed;
 	ListBase relocations;
+	ListBase tls;
 
 	uintptr_t exceptions;
 	
@@ -155,7 +144,6 @@ size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
 /* -------------------------------------------------------------------- */
 /** \name Modules Internal
  * { */
-
 
 extern fnMOM_module_header_is_valid MOM_module_header_is_valid;
 

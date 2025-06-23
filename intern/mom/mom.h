@@ -25,6 +25,8 @@
  * SOFTWARE.
  */
 
+#include "list.h"
+
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -47,15 +49,69 @@ typedef struct ModuleHandle ModuleHandle;
 typedef struct ModuleSection ModuleSection;
 typedef struct ModuleExport ModuleExport;
 typedef struct ModuleImport ModuleImport;
+typedef struct ModuleRelocation ModuleRelocation;
 typedef struct ModuleTLS ModuleTLS;
 typedef struct ModuleException ModuleException;
 typedef struct ProcessHandle ProcessHandle;
+typedef struct ThreadHandle ThreadHandle;
 
 typedef enum eMomArchitecture {
 	kMomArchitectureNone,
 	kMomArchitectureAmd32,
 	kMomArchitectureAmd64,
 } eMomArchitecture;
+
+typedef ListBase (*fnMOM_module_open_by_file)(const char *filepath);
+typedef ListBase (*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
+typedef struct ModuleHandle *(*fnMOM_module_open_by_image)(const void *image, size_t length);
+typedef struct ModuleHandle *(*fnMOM_module_open_by_address)(struct ProcessHandle *process, const void *address, size_t length);
+typedef size_t (*fnMOM_module_size)(const struct ModuleHandle *handle);
+typedef const char *(*fnMOM_module_name)(const struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_set_address)(ModuleHandle *handle, void *address);
+typedef void *(*fnMOM_module_get_address)(ModuleHandle *handle);
+typedef void *(*fnMOM_module_get_base)(ModuleHandle *handle);
+
+typedef void (*fnMOM_module_close)(struct ModuleHandle *handle);
+typedef void (*fnMOM_module_close_collection)(struct ListBase *collection);
+
+typedef eMomArchitecture (*fnMOM_module_architecture)(const struct ModuleHandle *handle);
+
+typedef ListBase (*fnMOM_module_sections)(struct ModuleHandle *handle);
+typedef ListBase (*fnMOM_module_exports)(struct ModuleHandle *handle);
+typedef ListBase (*fnMOM_module_imports)(struct ModuleHandle *handle);
+typedef ListBase (*fnMOM_module_imports_delayed)(struct ModuleHandle *handle);
+typedef ListBase (*fnMOM_module_tls)(struct ModuleHandle *handle);
+typedef ListBase (*fnMOM_module_relocations)(struct ModuleHandle *handle);
+
+typedef const char *(*fnMOM_module_section_name)(const struct ModuleHandle *handle, const struct ModuleSection *section);
+typedef void *(*fnMOM_module_section_logical)(const struct ModuleHandle *handle, const struct ModuleSection *section);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_section_physical)(const struct ModuleHandle *handle, const struct ModuleSection *section);
+typedef int (*fnMOM_module_section_protection)(const struct ModuleHandle *handle, const struct ModuleSection *section);
+typedef size_t (*fnMOM_module_section_size)(const struct ModuleHandle *handle, const struct ModuleSection *section);
+
+typedef const char *(*fnMOM_module_export_name)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef short (*fnMOM_module_export_ordinal)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef bool (*fnMOM_module_export_is_ordinal)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef bool (*fnMOM_module_export_is_forward)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef bool (*fnMOM_module_export_is_fowrard_by_ordinal)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef const char *(*fnMOM_module_export_forward_libname)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef short (*fnMOM_module_export_forward_ordinal)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef const char *(*fnMOM_module_export_forward_name)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+typedef void *(*fnMOM_module_export_logical)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_export_physical)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
+
+typedef bool (*fnMOM_module_import_is_ordinal)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+typedef const char *(*fnMOM_module_import_libname)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+typedef const char *(*fnMOM_module_import_expname)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+typedef short (*fnMOM_module_import_expordinal)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+typedef void *(*fnMOM_module_import_logical_thunk)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+typedef void *(*fnMOM_module_import_logical_funk)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_import_physical_thunk)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_import_physical_funk)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
 
 typedef enum eMomRelocationType {
 	kMomRelocationNone,
@@ -67,72 +123,10 @@ typedef enum eMomRelocationType {
 	kMomRelocationHighAdj,
 } eMomRelocationType;
 
-typedef struct ModuleHandle *(*fnMOM_module_open_by_file)(const char *filepath);
-typedef struct ModuleHandle *(*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
-typedef struct ModuleHandle *(*fnMOM_module_open_by_image)(const void *image, size_t length);
-typedef struct ModuleHandle *(*fnMOM_module_open_by_address)(struct ProcessHandle *process, const void *address, size_t length);
-typedef struct ModuleHandle *(*fnMOM_module_prev)(struct ModuleHandle *handle);
-typedef struct ModuleHandle *(*fnMOM_module_next)(struct ModuleHandle *handle);
-typedef const char *(*fnMOM_module_name)(struct ModuleHandle *handle);
-typedef void (*fnMOM_module_close)(struct ModuleHandle *handle);
-typedef void (*fnMOM_module_close_collection)(struct ModuleHandle *handle);
-typedef void *(*fnMOM_module_address)(struct ModuleHandle *handle);
-typedef size_t (*fnMOM_module_image_size)(const struct ModuleHandle *handle);
-typedef size_t (*fnMOM_module_memory_size)(const struct ModuleHandle *handle);
-typedef eMomArchitecture (*fnMOM_module_architecture)(const struct ModuleHandle *handle);
-typedef struct ModuleSection *(*fnMOM_module_section_begin)(struct ModuleHandle *handle);
-typedef struct ModuleSection *(*fnMOM_module_section_end)(struct ModuleHandle *handle);
-typedef struct ModuleSection *(*fnMOM_module_section_next)(struct ModuleHandle *handle, struct ModuleSection *itr);
-typedef const char *(*fnMOM_module_section_name)(const struct ModuleHandle *handle, const struct ModuleSection *section);
-typedef int (*fnMOM_module_section_protect)(const struct ModuleHandle *handle, const struct ModuleSection *section);
-typedef void *(*fnMOM_module_section_disk)(const struct ModuleHandle *handle, struct ModuleSection *section);
-// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef void *(*fnMOM_module_section_memory)(const struct ModuleHandle *handle, struct ModuleSection *section);
-typedef size_t (*fnMOM_module_section_size)(const struct ModuleHandle *handle, const struct ModuleSection *section);
-typedef struct ModuleExport *(*fnMOM_module_export_begin)(struct ModuleHandle *handle);
-typedef struct ModuleExport *(*fnMOM_module_export_end)(struct ModuleHandle *handle);
-typedef struct ModuleExport *(*fnMOM_module_export_next)(struct ModuleHandle *handle, struct ModuleExport *itr);
-typedef struct ModuleExport *(*fnMOM_module_export_find_by_name)(struct ModuleHandle *handle, const char *name);
-typedef struct ModuleExport *(*fnMOM_module_export_find_by_ordinal)(struct ModuleHandle *handle, int ordinal);
-typedef const void *(*fnMOM_module_export_disk)(struct ModuleHandle *handle, const struct ModuleExport *exported);
-// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef const void *(*fnMOM_module_export_memory)(struct ModuleHandle *handle, const struct ModuleExport *exported);
-typedef int (*fnMOM_module_export_ordinal)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
-typedef int (*fnMOM_module_export_forward_ordinal)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
-typedef const char *(*fnMOM_module_export_forward_name)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
-typedef const char *(*fnMOM_module_export_name)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
-typedef const char *(*fnMOM_module_export_lib)(const struct ModuleHandle *handle, const struct ModuleExport *exported);
-typedef struct ModuleImport *(*fnMOM_module_import_begin)(struct ModuleHandle *handle);
-typedef struct ModuleImport *(*fnMOM_module_import_end)(struct ModuleHandle *handle);
-typedef struct ModuleImport *(*fnMOM_module_import_next)(struct ModuleHandle *handle, struct ModuleImport *itr);
-typedef void *(*fnMOM_module_import_from_disk)(struct ModuleHandle *handle, struct ModuleImport *imported);
-typedef void *(*fnMOM_module_import_to_disk)(struct ModuleHandle *handle, struct ModuleImport *imported);
-// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef void *(*fnMOM_module_import_from_memory)(struct ModuleHandle *handle, struct ModuleImport *imported);
-typedef void *(*fnMOM_module_import_to_memory)(struct ModuleHandle *handle, struct ModuleImport *imported);
-typedef int (*fnMOM_module_import_ordinal)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
-typedef const char *(*fnMOM_module_import_name)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
-typedef const char *(*fnMOM_module_import_lib)(const struct ModuleHandle *handle, const struct ModuleImport *imported);
-typedef struct ModuleImport *(*fnMOM_module_import_delayed_begin)(struct ModuleHandle *handle);
-typedef struct ModuleImport *(*fnMOM_module_import_delayed_end)(struct ModuleHandle *handle);
-typedef struct ModuleImport *(*fnMOM_module_import_delayed_next)(struct ModuleHandle *handle, struct ModuleImport *itr);
-typedef struct ModuleTLS *(*fnMOM_module_tls_begin)(struct ModuleHandle *handle);
-typedef struct ModuleTLS *(*fnMOM_module_tls_end)(struct ModuleHandle *handle);
-typedef struct ModuleTLS *(*fnMOM_module_tls_next)(struct ModuleHandle *handle, struct ModuleTLS *itr);
-typedef void *(*fnMOM_module_tls_disk)(const struct ModuleHandle *handle, struct ModuleTLS *tls);
-// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef void *(*fnMOM_module_tls_memory)(const struct ModuleHandle *handle, struct ModuleTLS *tls);
-typedef struct ModuleRelocation *(*fnMOM_module_relocation_begin)(struct ModuleHandle *handle);
-typedef struct ModuleRelocation *(*fnMOM_module_relocation_end)(struct ModuleHandle *handle);
-typedef struct ModuleRelocation *(*fnMOM_module_relocation_next)(struct ModuleHandle *handle, struct ModuleRelocation *itr);
-typedef void *(*fnMOM_module_relocation_disk)(const struct ModuleHandle *handle, struct ModuleRelocation *relocation);
-// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef void *(*fnMOM_module_relocation_memory)(const struct ModuleHandle *handle, struct ModuleRelocation *relocation);
 typedef eMomRelocationType (*fnMOM_module_relocation_type)(const struct ModuleHandle *handle, const struct ModuleRelocation *relocation);
-typedef void *(*fnMOM_module_exception_disk)(struct ModuleHandle *handle);
-// Even if this doesn't return NULL there is a good chance that this pointer is not owned by this process!
-typedef void *(*fnMOM_module_exception_memory)(struct ModuleHandle *handle);
-typedef int (*fnMOM_module_exception_length)(const struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_relocation_logical)(const struct ModuleHandle *handle, const struct ModuleRelocation *relocation);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_relocation_physical)(const struct ModuleHandle *handle, const struct ModuleRelocation *relocation);
 
 typedef enum eMomMemoryProtect {
 	kMomProtectNone = 0,
@@ -141,6 +135,7 @@ typedef enum eMomMemoryProtect {
 	kMomProtectExec = (1 << 2),
 } eMomMemoryProtect;
 
+typedef ListBase (*fnMOM_process_open_by_name)(const char *name);
 typedef struct ProcessHandle *(*fnMOM_process_open)(int identifier);
 typedef struct ProcessHandle *(*fnMOM_process_self)(void);
 typedef void *(*fnMOM_process_allocate)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
@@ -149,14 +144,20 @@ typedef size_t (*fnMOM_process_write)(struct ProcessHandle *handle, void *addres
 typedef size_t (*fnMOM_process_read)(struct ProcessHandle *handle, const void *address, void *buffer, size_t size);
 typedef void (*fnMOM_process_free)(struct ProcessHandle *handle, void *address);
 typedef void (*fnMOM_process_close)(struct ProcessHandle *handle);
+typedef void (*fnMOM_process_close_collection)(ListBase *lb);
 typedef int (*fnMOM_process_identifier)(const struct ProcessHandle *handle);
 
-// This is the list of all known loaded modules inside a process!
+typedef ModuleHandle *(*fnMOM_process_module_find_by_name)(struct ProcessHandle *process, const char *name);
 typedef ModuleHandle *(*fnMOM_process_module_push)(struct ProcessHandle *process, const ModuleHandle *handle);
 typedef ModuleHandle *(*fnMOM_process_module_find)(struct ProcessHandle *process, const ModuleHandle *handle);
-typedef ModuleHandle *(*fnMOM_process_module_begin)(struct ProcessHandle *process);
-typedef ModuleHandle *(*fnMOM_process_module_end)(struct ProcessHandle *process);
-typedef ModuleHandle *(*fnMOM_process_module_next)(struct ProcessHandle *process, struct ModuleHandle *itr);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Architecture
+ * { */
+
+size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
 
 /** \} */
 
@@ -164,66 +165,67 @@ typedef ModuleHandle *(*fnMOM_process_module_next)(struct ProcessHandle *process
 /** \name Modules
  * { */
 
+// This can return a collection of modules when the name exists in the schema API
 extern fnMOM_module_open_by_file MOM_module_open_by_file;
+// This can return a collection of modules when the name exists in the schema API
 extern fnMOM_module_open_by_name MOM_module_open_by_name;
 extern fnMOM_module_open_by_image MOM_module_open_by_image;
 extern fnMOM_module_open_by_address MOM_module_open_by_address;
-extern fnMOM_module_prev MOM_module_prev;
-extern fnMOM_module_next MOM_module_next;
+extern fnMOM_module_size MOM_module_size;
 extern fnMOM_module_name MOM_module_name;
+extern fnMOM_module_set_address MOM_module_set_address;
+extern fnMOM_module_get_address MOM_module_get_address;
+extern fnMOM_module_get_base MOM_module_get_base;
+
 extern fnMOM_module_close MOM_module_close;
 extern fnMOM_module_close_collection MOM_module_close_collection;
-extern fnMOM_module_address MOM_module_address;
-extern fnMOM_module_image_size MOM_module_image_size;
-extern fnMOM_module_memory_size MOM_module_memory_size;
+
 extern fnMOM_module_architecture MOM_module_architecture;
-extern fnMOM_module_section_begin MOM_module_section_begin;
-extern fnMOM_module_section_end MOM_module_section_end;
-extern fnMOM_module_section_next MOM_module_section_next;
+
+extern fnMOM_module_sections MOM_module_sections;
+extern fnMOM_module_exports MOM_module_exports;
+extern fnMOM_module_imports MOM_module_imports;
+extern fnMOM_module_imports_delayed MOM_module_imports_delayed;
+extern fnMOM_module_tls MOM_module_tls;
+extern fnMOM_module_relocations MOM_module_relocations;
+
 extern fnMOM_module_section_name MOM_module_section_name;
-extern fnMOM_module_section_protect MOM_module_section_protect;
-extern fnMOM_module_section_disk MOM_module_section_disk;
-extern fnMOM_module_section_memory MOM_module_section_memory;
+extern fnMOM_module_section_logical MOM_module_section_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_section_physical MOM_module_section_physical;
+extern fnMOM_module_section_protection MOM_module_section_protection;
 extern fnMOM_module_section_size MOM_module_section_size;
-extern fnMOM_module_export_begin MOM_module_export_begin;
-extern fnMOM_module_export_end MOM_module_export_end;
-extern fnMOM_module_export_next MOM_module_export_next;
-extern fnMOM_module_export_find_by_name MOM_module_export_find_by_name;
-extern fnMOM_module_export_find_by_ordinal MOM_module_export_find_by_ordinal;
-extern fnMOM_module_export_disk MOM_module_export_disk;
-extern fnMOM_module_export_memory MOM_module_export_memory;
+
+extern fnMOM_module_import_is_ordinal MOM_module_import_is_ordinal;
+extern fnMOM_module_import_libname MOM_module_import_libname;
+extern fnMOM_module_import_expname MOM_module_import_expname;
+extern fnMOM_module_import_expordinal MOM_module_import_expordinal;
+extern fnMOM_module_import_logical_thunk MOM_module_import_logical_thunk;
+extern fnMOM_module_import_logical_funk MOM_module_import_logical_funk;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_import_physical_thunk MOM_module_import_physical_thunk;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_import_physical_funk MOM_module_import_physical_funk;
+
+extern fnMOM_module_export_name MOM_module_export_name;
 extern fnMOM_module_export_ordinal MOM_module_export_ordinal;
+extern fnMOM_module_export_is_ordinal MOM_module_export_is_ordinal;
+extern fnMOM_module_export_is_forward MOM_module_export_is_forward;
+extern fnMOM_module_export_is_fowrard_by_ordinal MOM_module_export_is_fowrard_by_ordinal;
+extern fnMOM_module_export_forward_libname MOM_module_export_forward_libname;
 extern fnMOM_module_export_forward_ordinal MOM_module_export_forward_ordinal;
 extern fnMOM_module_export_forward_name MOM_module_export_forward_name;
-extern fnMOM_module_export_lib MOM_module_export_lib;
-extern fnMOM_module_export_name MOM_module_export_name;
-extern fnMOM_module_import_begin MOM_module_import_begin;
-extern fnMOM_module_import_end MOM_module_import_end;
-extern fnMOM_module_import_next MOM_module_import_next;
-extern fnMOM_module_import_from_disk MOM_module_import_from_disk;
-extern fnMOM_module_import_to_disk MOM_module_import_to_disk;
-extern fnMOM_module_import_from_memory MOM_module_import_from_memory;
-extern fnMOM_module_import_to_memory MOM_module_import_to_memory;
-extern fnMOM_module_import_ordinal MOM_module_import_ordinal;
-extern fnMOM_module_import_name MOM_module_import_name;
-extern fnMOM_module_import_lib MOM_module_import_lib;
-extern fnMOM_module_import_delayed_begin MOM_module_import_delayed_begin;
-extern fnMOM_module_import_delayed_end MOM_module_import_delayed_end;
-extern fnMOM_module_import_delayed_next MOM_module_import_delayed_next;
-extern fnMOM_module_tls_begin MOM_module_tls_begin;
-extern fnMOM_module_tls_end MOM_module_tls_end;
-extern fnMOM_module_tls_next MOM_module_tls_next;
-extern fnMOM_module_tls_disk MOM_module_tls_disk;
-extern fnMOM_module_tls_memory MOM_module_tls_memory;
-extern fnMOM_module_relocation_begin MOM_module_relocation_begin;
-extern fnMOM_module_relocation_end MOM_module_relocation_end;
-extern fnMOM_module_relocation_next MOM_module_relocation_next;
-extern fnMOM_module_relocation_disk MOM_module_relocation_disk;
-extern fnMOM_module_relocation_memory MOM_module_relocation_memory;
+extern fnMOM_module_export_logical MOM_module_export_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_export_physical MOM_module_export_physical;
+
+ModuleExport *MOM_module_export_find_by_name(struct ModuleHandle *handle, const char *name);
+ModuleExport *MOM_module_export_find_by_ordinal(struct ModuleHandle *handle, short ordinal);
+
 extern fnMOM_module_relocation_type MOM_module_relocation_type;
-extern fnMOM_module_exception_disk MOM_module_exception_disk;
-extern fnMOM_module_exception_memory MOM_module_exception_memory;
-extern fnMOM_module_exception_length MOM_module_exception_length;
+extern fnMOM_module_relocation_logical MOM_module_relocation_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_relocation_physical MOM_module_relocation_physical;
 
 /** \} */
 
@@ -231,6 +233,8 @@ extern fnMOM_module_exception_length MOM_module_exception_length;
 /** \name Process
  * { */
 
+// This can return a collection of processes when there are mutiple application with this name
+extern fnMOM_process_open_by_name MOM_process_open_by_name;
 extern fnMOM_process_open MOM_process_open;
 extern fnMOM_process_self MOM_process_self;
 extern fnMOM_process_allocate MOM_process_allocate;
@@ -239,13 +243,13 @@ extern fnMOM_process_write MOM_process_write;
 extern fnMOM_process_read MOM_process_read;
 extern fnMOM_process_free MOM_process_free;
 extern fnMOM_process_close MOM_process_close;
+extern fnMOM_process_close_collection MOM_process_close_collection;
 extern fnMOM_process_identifier MOM_process_identifier;
 
+// This is the list of all known loaded modules inside a process!
 extern fnMOM_process_module_push MOM_process_module_push;
 extern fnMOM_process_module_find MOM_process_module_find;
-extern fnMOM_process_module_begin MOM_process_module_begin;
-extern fnMOM_process_module_end MOM_process_module_end;
-extern fnMOM_process_module_next MOM_process_module_next;
+extern fnMOM_process_module_find_by_name MOM_process_module_find_by_name;
 
 /** \} */
 

@@ -46,7 +46,7 @@ set(SRC_UNIX
 set(LIB
 	# Internal Library Dependencies
 	bob::intern::guardedalloc
-	bob::intern::utils
+	PUBLIC bob::intern::utils
 	
 	# External Library Dependencies
 	

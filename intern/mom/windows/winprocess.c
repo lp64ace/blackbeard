@@ -4,6 +4,77 @@
 #include "mom.h"
 #include "winmom.h" // Keep last!
 
+#include <tlhelp32.h>
+
+/* -------------------------------------------------------------------- */
+/** \name DLL Hell
+ * { */
+
+static bool winmom_module_schema_match(const wchar_t *wlogical, const char *search) {
+	WCHAR wsearch[MAX_PATH];
+	INT length = MultiByteToWideChar(CP_ACP, 0, search, -1, wsearch, ARRAYSIZE(wsearch));
+
+	for (INT index = 0; wlogical[index]; index++) {
+		if (towupper(wsearch[index]) != towupper(wlogical[index])) {
+			return false;
+		}
+	}
+
+	return true;
+}
+
+// Version 10
+
+typedef struct _API_SET_VALUE_ENTRY_10 {
+	ULONG Flags;
+	ULONG NameOffset;
+	ULONG NameLength;
+	ULONG ValueOffset;
+	ULONG ValueLength;
+} API_SET_VALUE_ENTRY_10, *PAPI_SET_VALUE_ENTRY_10;
+
+typedef struct _API_SET_VALUE_ARRAY_10 {
+	ULONG Flags;
+	ULONG NameOffset;
+	ULONG Unk;
+	ULONG NameLength;
+	ULONG DataOffset;
+	ULONG Count;
+} API_SET_VALUE_ARRAY_10, *PAPI_SET_VALUE_ARRAY_10;
+
+static inline PAPI_SET_VALUE_ENTRY_10 API_SET_VALUE_ARRAY_10_entry(PAPI_SET_VALUE_ARRAY_10 self, void *map, DWORD i) {
+	return POINTER_OFFSET(map, self->DataOffset + i * sizeof(API_SET_VALUE_ENTRY_10));
+}
+
+typedef struct _API_SET_NAMESPACE_ENTRY_10 {
+	ULONG Limit;
+	ULONG Size;
+} API_SET_NAMESPACE_ENTRY_10, *PAPI_SET_NAMESPACE_ENTRY_10;
+
+typedef struct _API_SET_NAMESPACE_ARRAY_10 {
+	ULONG Version;
+	ULONG Size;
+	ULONG Flags;
+	ULONG Count;
+	ULONG Start;
+	ULONG End;
+	ULONG Unk[2];
+} API_SET_NAMESPACE_ARRAY_10, *PAPI_SET_NAMESPACE_ARRAY_10;
+
+static inline PAPI_SET_NAMESPACE_ENTRY_10 API_SET_NAMESPACE_ARRAY_10_key(PAPI_SET_NAMESPACE_ARRAY_10 self, DWORD i) {
+	return POINTER_OFFSET(self, self->End + i * sizeof(API_SET_NAMESPACE_ENTRY_10));
+}
+
+static inline PAPI_SET_VALUE_ARRAY_10 API_SET_NAMESPACE_ARRAY_10_value(PAPI_SET_NAMESPACE_ARRAY_10 self, PAPI_SET_NAMESPACE_ENTRY_10 key) {
+	return POINTER_OFFSET(self, self->Start + sizeof(API_SET_VALUE_ARRAY_10) * key->Size);
+}
+
+DWORD API_SET_NAMESPACE_ARRAY_version(void *self) {
+	return 10; // TODO Fix Me
+}
+
+/** \} */
+
 /* -------------------------------------------------------------------- */
 /** \name Process Platform Dependent
  * { */
@@ -36,6 +107,64 @@ static inline DWORD winmom_process_protection_to_native(int protect) {
 	return PAGE_NOACCESS;
 }
 
+
+/**
+ * schemanames are absolutely nuts here are some name layouts;
+ *  - [EXT-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
+ *  - [API-MS-WIN-][Schema-Name-Separated]-L[MajorVersion-MinorVersion](-RevisionVersion)(.dll)
+ */
+ListBase winmom_process_resolve_schema(const char *schemaname) {
+	ListBase list;
+	LIB_listbase_clear(&list);
+
+	ProcessHandle *self = MOM_process_self();
+
+	PEB peb;
+	if (winmom_process_peb(self, &peb)) {
+		do {
+			if (!peb.Reserved9[0]) {
+				break;
+			}
+
+			switch (API_SET_NAMESPACE_ARRAY_version(peb.Reserved9[0])) {
+				case 10: {
+					PAPI_SET_NAMESPACE_ARRAY_10 map = (PAPI_SET_NAMESPACE_ARRAY_10)peb.Reserved9[0];
+
+					for (DWORD i = 0; i < map->Count; i++) {
+						WCHAR wlogical[MAX_PATH], wphysical[MAX_PATH];
+
+						memset(wlogical, 0, sizeof(wlogical));
+						PAPI_SET_NAMESPACE_ENTRY_10 key = API_SET_NAMESPACE_ARRAY_10_key(map, i);
+						PAPI_SET_VALUE_ARRAY_10 value = API_SET_NAMESPACE_ARRAY_10_value(map, key);
+						memcpy(wlogical, POINTER_OFFSET(map, value->NameOffset), value->NameLength);
+
+						if (winmom_module_schema_match(wlogical, schemaname)) {
+							for (DWORD j = 0; j < value->Count; j++) {
+								PAPI_SET_VALUE_ENTRY_10 host = API_SET_VALUE_ARRAY_10_entry(value, map, j);
+
+								memset(wphysical, 0, sizeof(wphysical));
+								memcpy(wphysical, POINTER_OFFSET(map, host->ValueOffset), host->ValueLength);
+
+								CHAR physical[MAX_PATH];
+								int length = WideCharToMultiByte(CP_ACP, 0, wphysical, -1, physical, ARRAYSIZE(physical), 0, NULL);
+
+								SchemaEntry *entry = MEM_callocN(sizeof(SchemaEntry), "SchemaEntry");
+								memcpy(entry->physical, physical, length);
+								LIB_addtail(&list, entry);
+							}
+
+							break;
+						}
+					}
+				} break;
+			}
+		} while (false);
+	}
+
+	MOM_process_close(self);
+	return list;
+}
+
 HANDLE winmom_process_handle(const ProcessHandle *handle) {
 	return (HANDLE)handle->native;
 }
@@ -61,8 +190,25 @@ LPVOID winmom_process_peb(const ProcessHandle *handle, PEB *peb) {
 /** \name Process
  * { */
 
+ListBase winmom_process_open_by_name(const char *name) {
+	HANDLE snapshot = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+	PROCESSENTRY32 entry;
+	entry.dwSize = sizeof(PROCESSENTRY32);
+
+	ListBase list;
+	LIB_listbase_clear(&list);
+	for (BOOL ret = Process32First(snapshot, &entry); ret; ret = Process32Next(snapshot, &entry)) {
+		if (strcmp(entry.szExeFile, name) == 0) {
+			LIB_addtail(&list, MOM_process_open(entry.th32ProcessID));
+		}
+	}
+
+	return list;
+}
+
 ProcessHandle *winmom_process_open(int identifier) {
-	ProcessHandle *handle = MEM_callocN(sizeof(ProcessHandle), "process");
+	ProcessHandle *handle = MEM_callocN(sizeof(ProcessHandle), "ProcessHandle");
 	handle->native = OpenProcess(0xFFFF, FALSE, identifier);
 
 	do {
@@ -100,8 +246,9 @@ ProcessHandle *winmom_process_open(int identifier) {
 			CHAR FullDllName[MAX_PATH * 4];
 			int MaxLength = WideCharToMultiByte(CP_ACP, 0, local.FullDllName.Buffer, local.FullDllName.MaximumLength, FullDllName, ARRAYSIZE(FullDllName), 0, NULL);
 			ModuleHandle *module = MOM_module_open_by_address(handle, local.DllBase, local.Reserved3[1]);
-
-			memcpy(module->dllname, FullDllName, MaxLength);
+			if (module) {
+				memcpy(module->dllname, FullDllName, MaxLength);
+			}
 			LIB_addtail(&handle->modules, module);
 
 			total++;
@@ -171,24 +318,27 @@ int winmom_process_identifier(const ProcessHandle *handle) {
 
 ModuleHandle *winmom_process_module_push(ProcessHandle *handle, ModuleHandle *module) {
 	if (MOM_module_name(module)) {
-		ModuleHandle *duplicate = MOM_module_open_by_file(MOM_module_name(module));
+		ListBase duplicates = MOM_module_open_by_file(MOM_module_name(module));
 
-		if (duplicate) {
+		if (LIB_listbase_is_single(&duplicates)) {
+			ModuleHandle *duplicate = (ModuleHandle *)duplicates.first;
+
 			/** Since we use the name to find a module copy the name from the original module! **/
 			memcpy(duplicate->dllname, module->dllname, sizeof(duplicate->dllname));
 			duplicate->real = module->real;
-
 			LIB_addtail(&handle->modules, duplicate);
+
+			return duplicate;
 		}
 
-		return duplicate;
+		return NULL;
 	}
 
 	return NULL;
 }
 
 ModuleHandle *winmom_process_module_find(ProcessHandle *handle, ModuleHandle *module) {
-	for (ModuleHandle *itr = MOM_process_module_begin(handle); itr != MOM_process_module_end(handle); itr = MOM_process_module_next(handle, itr)) {
+	LISTBASE_FOREACH(ModuleHandle *, itr, &handle->modules) {
 		if (MOM_module_name(module)) {
 			if (strcmp(MOM_module_name(module), MOM_module_name(itr)) == 0) {
 				return itr;
@@ -199,12 +349,35 @@ ModuleHandle *winmom_process_module_find(ProcessHandle *handle, ModuleHandle *mo
 	return NULL;
 }
 
+ModuleHandle *winmom_process_module_find_by_name(ProcessHandle *handle, const char *name) {
+	LISTBASE_FOREACH(ModuleHandle *, itr, &handle->modules) {
+		if (winmom_module_loaded_match_name(MOM_module_name(itr), name)) {
+			return itr;
+		}
+	}
+
+	ModuleHandle *module = NULL;
+
+	ListBase schema = winmom_process_resolve_schema(name);
+	LISTBASE_FOREACH(SchemaEntry *, entry, &schema) {
+		LISTBASE_FOREACH(ModuleHandle *, itr, &handle->modules) {
+			if (winmom_module_loaded_match_name(MOM_module_name(itr), entry->physical)) {
+				module = itr;
+			}
+		}
+	}
+	LIB_freelistN(&schema);
+
+	return module;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Exports
  * { */
 
+fnMOM_process_open_by_name MOM_process_open_by_name = winmom_process_open_by_name;
 fnMOM_process_open MOM_process_open = winmom_process_open;
 fnMOM_process_self MOM_process_self = winmom_process_self;
 fnMOM_process_allocate MOM_process_allocate = winmom_process_allocate;
@@ -217,5 +390,6 @@ fnMOM_process_identifier MOM_process_identifier = winmom_process_identifier;
 
 fnMOM_process_module_push MOM_process_module_push = winmom_process_module_push;
 fnMOM_process_module_find MOM_process_module_find = winmom_process_module_find;
+fnMOM_process_module_find_by_name MOM_process_module_find_by_name = winmom_process_module_find_by_name;
 
 /** \} */

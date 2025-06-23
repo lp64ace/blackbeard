@@ -17,135 +17,117 @@ namespace {
 #endif
 
 TEST(MomLocal, Sections) {
-	ProcessHandle *self = MOM_process_self();
-	do {
-		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
-		ASSERT_NE(kernel32, nullptr);
-		for (ModuleSection *section = MOM_module_section_begin(kernel32); section != MOM_module_section_end(kernel32); section = MOM_module_section_next(kernel32, section)) {
-			const char *name = MOM_module_section_name(kernel32, section);
-			EXPECT_EQ(name[0], '.');
-			EXPECT_GT(strlen(name), 0);
-			EXPECT_LT(strlen(name), 8);
-			EXPECT_EQ(MOM_module_section_disk(kernel32, section), nullptr) << name;
-			EXPECT_NE(MOM_module_section_memory(kernel32, section), nullptr) << name;
+	ProcessHandle *process = MOM_process_self();
+	if (!process) {
+		GTEST_SKIP();
+	}
+
+	ListBase modules = MOM_module_open_by_name(process, TEST_MODULE_NAME);
+	EXPECT_TRUE(!LIB_listbase_is_empty(&modules));
+	EXPECT_TRUE(LIB_listbase_is_single(&modules));
+	LISTBASE_FOREACH(ModuleHandle *, handle, &modules) {
+		ListBase sections = MOM_module_sections(handle);
+		LISTBASE_FOREACH(ModuleSection *, section, &sections) {
+			EXPECT_EQ(MOM_module_section_name(handle, section)[0], '.');
 		}
-		MOM_module_close_collection(kernel32);
-	} while (false);
-	MOM_process_close(self);
+		EXPECT_GT(LIB_listbase_count(&sections), 0);
+	}
+	MOM_module_close_collection(&modules);
+	MOM_process_close(process);
 }
 
 TEST(MomLocal, Exports) {
-	ProcessHandle *self = MOM_process_self();
-	do {
-		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
-		ASSERT_NE(kernel32, nullptr);
-		for (ModuleExport *exported = MOM_module_export_begin(kernel32); exported != MOM_module_export_end(kernel32); exported = MOM_module_export_next(kernel32, exported)) {
-			const char *name = MOM_module_export_name(kernel32, exported);
-			if (name) {
-				EXPECT_GE(strlen(name), 0);
-				EXPECT_LT(strlen(name), MOM_MAX_EXPNAME_LEN);
-				EXPECT_EQ(MOM_module_export_disk(kernel32, exported), nullptr) << name;
-				if (!MOM_module_export_lib(kernel32, exported)) {
-					EXPECT_NE(MOM_module_export_memory(kernel32, exported), nullptr) << name;
+	ProcessHandle *process = MOM_process_self();
+	if (!process) {
+		GTEST_SKIP();
+	}
+
+	ListBase modules = MOM_module_open_by_name(process, TEST_MODULE_NAME);
+	EXPECT_TRUE(!LIB_listbase_is_empty(&modules));
+	EXPECT_TRUE(LIB_listbase_is_single(&modules));
+	LISTBASE_FOREACH(ModuleHandle *, handle, &modules) {
+		ListBase exports = MOM_module_exports(handle);
+		LISTBASE_FOREACH(ModuleExport *, exported, &exports) {
+			if (!MOM_module_export_is_forward(handle, exported)) {
+				EXPECT_NE(MOM_module_export_logical(handle, exported), nullptr);
+				EXPECT_NE(MOM_module_export_physical(handle, exported), nullptr);
+
+#ifdef WIN32
+				if (!MOM_module_export_is_ordinal(handle, exported)) {
+					void *correct = GetProcAddress(LoadLibrary("kernel32.dll"), MOM_module_export_name(handle, exported));
+
+					/**
+					 * This way we know that we did in fact resolve the correct name + address!
+					 */
+					EXPECT_EQ(MOM_module_export_physical(handle, exported), correct);
 				}
+#endif
 			}
 		}
-		MOM_module_close_collection(kernel32);
-	} while (false);
-	MOM_process_close(self);
+		EXPECT_GT(LIB_listbase_count(&exports), 0);
+	}
+	MOM_module_close_collection(&modules);
+	MOM_process_close(process);
 }
 
 TEST(MomLocal, Imports) {
-	ProcessHandle *self = MOM_process_self();
-	do {
-		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
-		ASSERT_NE(kernel32, nullptr);
-		for (ModuleImport *imported = MOM_module_import_begin(kernel32); imported != MOM_module_import_end(kernel32); imported = MOM_module_import_next(kernel32, imported)) {
-			const char *lib = MOM_module_import_lib(kernel32, imported);
-			if (lib) {
-				EXPECT_GE(strlen(lib), 0);
-				EXPECT_LT(strlen(lib), MOM_MAX_EXPNAME_LEN);
-			}
-			const char *name = MOM_module_import_name(kernel32, imported);
-			if (name) {
-				EXPECT_GE(strlen(name), 0);
-				EXPECT_LT(strlen(name), MOM_MAX_EXPNAME_LEN);
-			}
+	ProcessHandle *process = MOM_process_self();
+	if (!process) {
+		GTEST_SKIP();
+	}
 
-			EXPECT_EQ(MOM_module_import_to_disk(kernel32, imported), nullptr);
-			EXPECT_NE(MOM_module_import_to_memory(kernel32, imported), nullptr);
-
-			EXPECT_NE(lib, nullptr);
-			EXPECT_NE(name, nullptr);
+	ListBase modules = MOM_module_open_by_name(process, TEST_MODULE_NAME);
+	EXPECT_TRUE(!LIB_listbase_is_empty(&modules));
+	EXPECT_TRUE(LIB_listbase_is_single(&modules));
+	LISTBASE_FOREACH(ModuleHandle *, handle, &modules) {
+		ListBase imports = MOM_module_imports(handle);
+		LISTBASE_FOREACH(ModuleImport *, imported, &imports) {
+			EXPECT_NE(MOM_module_import_libname(handle, imported), nullptr);
 		}
-		MOM_module_close_collection(kernel32);
-	} while (false);
-	MOM_process_close(self);
+		EXPECT_GT(LIB_listbase_count(&imports), 0);
+	}
+	MOM_module_close_collection(&modules);
+	MOM_process_close(process);
 }
 
-TEST(MomLocal, DelayedImports) {
-	ProcessHandle *self = MOM_process_self();
-	do {
-		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
-		ASSERT_NE(kernel32, nullptr);
-		for (ModuleImport *imported = MOM_module_import_delayed_begin(kernel32); imported != MOM_module_import_delayed_end(kernel32); imported = MOM_module_import_delayed_next(kernel32, imported)) {
-			const char *lib = MOM_module_import_lib(kernel32, imported);
-			if (lib) {
-				EXPECT_GE(strlen(lib), 0);
-				EXPECT_LT(strlen(lib), MOM_MAX_EXPNAME_LEN);
-			}
-			const char *name = MOM_module_import_name(kernel32, imported);
-			if (name) {
-				EXPECT_GE(strlen(name), 0);
-				EXPECT_LT(strlen(name), MOM_MAX_EXPNAME_LEN);
-			}
+TEST(MomLocal, ImportsDelayed) {
+	ProcessHandle *process = MOM_process_self();
+	if (!process) {
+		GTEST_SKIP();
+	}
 
-			EXPECT_EQ(MOM_module_import_to_disk(kernel32, imported), nullptr);
-			EXPECT_NE(MOM_module_import_to_memory(kernel32, imported), nullptr);
-
-			EXPECT_NE(lib, nullptr);
-			EXPECT_NE(name, nullptr);
+	ListBase modules = MOM_module_open_by_name(process, TEST_MODULE_NAME);
+	EXPECT_TRUE(!LIB_listbase_is_empty(&modules));
+	EXPECT_TRUE(LIB_listbase_is_single(&modules));
+	LISTBASE_FOREACH(ModuleHandle *, handle, &modules) {
+		ListBase imports = MOM_module_imports_delayed(handle);
+		LISTBASE_FOREACH(ModuleImport *, imported, &imports) {
+			EXPECT_NE(MOM_module_import_libname(handle, imported), nullptr);
 		}
-		MOM_module_close_collection(kernel32);
-	} while (false);
-	MOM_process_close(self);
+		EXPECT_GT(LIB_listbase_count(&imports), 0);
+	}
+	MOM_module_close_collection(&modules);
+	MOM_process_close(process);
 }
 
-#ifdef WIN32
+TEST(MomLocal, Relocations) {
+	ProcessHandle *process = MOM_process_self();
+	if (!process) {
+		GTEST_SKIP();
+	}
 
-/**
- * These are the real unit tests that we need to be concerned about!
- * We strive to replace platform specific functionality, we ought to test against it!
- */
-
-TEST(MomLocal, ExportsWindows) {
-	ProcessHandle *self = MOM_process_self();
-	do {
-		ModuleHandle *kernel32 = MOM_module_open_by_name(self, TEST_MODULE_NAME);
-		ASSERT_NE(kernel32, nullptr);
-
-		HMODULE hkernel32 = LoadLibrary(TEST_MODULE_NAME);
-		ASSERT_NE(hkernel32, nullptr);
-
-		EXPECT_EQ(hkernel32, MOM_module_address(kernel32));
-		for (ModuleExport *exported = MOM_module_export_begin(kernel32); exported != MOM_module_export_end(kernel32); exported = MOM_module_export_next(kernel32, exported)) {
-			const char *name = MOM_module_export_name(kernel32, exported);
-			if (name) {
-				EXPECT_GE(strlen(name), 0);
-				EXPECT_LT(strlen(name), MOM_MAX_EXPNAME_LEN);
-				if (!MOM_module_export_lib(kernel32, exported)) {
-					EXPECT_EQ(GetProcAddress(hkernel32, name), MOM_module_export_memory(kernel32, exported)) << name;
-				}
-			}
+	ListBase modules = MOM_module_open_by_name(process, TEST_MODULE_NAME);
+	EXPECT_TRUE(!LIB_listbase_is_empty(&modules));
+	EXPECT_TRUE(LIB_listbase_is_single(&modules));
+	LISTBASE_FOREACH(ModuleHandle *, handle, &modules) {
+		ListBase relocations = MOM_module_relocations(handle);
+		LISTBASE_FOREACH(ModuleRelocation *, relocation, &relocations) {
+			EXPECT_NE(MOM_module_relocation_type(handle, relocation), kMomRelocationNone);
 		}
-
-		FreeLibrary(hkernel32);
-
-		MOM_module_close_collection(kernel32);
-	} while (false);
-	MOM_process_close(self);
+		EXPECT_GT(LIB_listbase_count(&relocations), 0);
+	}
+	MOM_module_close_collection(&modules);
+	MOM_process_close(process);
 }
-
-#endif
 
 }

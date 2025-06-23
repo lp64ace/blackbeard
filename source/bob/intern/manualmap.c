@@ -1,7 +1,7 @@
 #include "manualmap.h"
 
+#include "defines.h"
 #include "mom.h"
-#include "intern/mom_internal.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -13,15 +13,69 @@
 /** \name Implementation
  * \{ */
 
+void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname, const char *expname, int maxhops);
+
+void *BOB_manual_map_resolve_import_ex(ProcessHandle *process, ModuleHandle *existing, const char *libname, const char *expname, int maxhops) {
+	ModuleExport *exported = NULL;
+
+	if (((uintptr_t)expname & ~0xFFFF) != 0) {
+		exported = MOM_module_export_find_by_name(existing, expname);
+	} else {
+		exported = MOM_module_export_find_by_ordinal(existing, POINTER_AS_INT(expname));
+	}
+
+	if (!exported) {
+		return (void *)NULL;
+	}
+
+	const char *fwd_libname = MOM_module_export_forward_libname(existing, exported);
+
+	// The export we are looking for exists but it is a forwarded export!
+	if (fwd_libname) {
+		const char *fwd_expname = MOM_module_export_forward_name(existing, exported);
+
+		if (fwd_expname) {
+			return BOB_manual_map_resolve_import(process, fwd_libname, fwd_expname, maxhops - 1);
+		} else {
+			return BOB_manual_map_resolve_import(process, fwd_libname, POINTER_FROM_INT(MOM_module_export_forward_ordinal(existing, exported)), maxhops - 1);
+		}
+	}
+
+	if (exported) {
+		// The export we are looking for exists and is a normal export!
+		return MOM_module_export_physical(existing, exported);
+	}
+
+	return NULL;
+}
+
 // TODO Slow as fuck! Hopefully we can fix that at some point!
 void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname, const char *expname, int maxhops) {
-	ModuleHandle *handle = NULL;
+	ListBase collection;
+	LIB_listbase_clear(&collection);
 	
+	void *address = NULL;
+
+	/**
+	 * TODO: In order to make this routine faster we need to make the following code faster!
+	 * #MOM_process_module_find_by_name is slow because it goes through the windows schema table, 
+	 * we need to cash ALL these entries in a red-black tree to quickly iterate them!
+	 */
+
+	ModuleHandle *existing = NULL;
+	if ((existing = MOM_process_module_find_by_name(process, libname))) {
+		if ((address = BOB_manual_map_resolve_import_ex(process, existing, libname, expname, maxhops - 1))) {
+			return address;
+		}
+	}
+
 	do {
-		if ((handle = MOM_module_open_by_name(process, libname))) {
+		collection = MOM_module_open_by_name(process, libname);
+		if (!LIB_listbase_is_empty(&collection)) {
 			break;
 		}
-		if ((handle = MOM_module_open_by_file(libname))) {
+		collection = MOM_module_open_by_file(libname);
+		if (!LIB_listbase_is_empty(&collection)) {
 			break;
 		}
 
@@ -34,42 +88,14 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 		return NULL;
 	} while (false);
 
-	void *address = NULL;
-
-	for (ModuleHandle *itr = handle; itr; itr = MOM_module_next(itr)) {
-		ModuleHandle *existing = NULL;
-
-		/**
-		 * TODO I do not like this system, having to first load the module, 
-		 * then looking to find it within the loaded modules is bad!
-		 */
+	LISTBASE_FOREACH(ModuleHandle *, handle, &collection) {
 
 		// We have already loaded this module as a depdency, resolve it!
 		if ((existing = MOM_process_module_find(process, handle))) {
-			ModuleExport *exported = NULL;
+			if ((address = BOB_manual_map_resolve_import_ex(process, existing, libname, expname, maxhops - 1))) {
+				MOM_module_close_collection(&collection);
 
-			if (((uintptr_t)expname & ~0xFFFF) != 0) {
-				exported = MOM_module_export_find_by_name(existing, expname);
-			} else {
-				exported = MOM_module_export_find_by_ordinal(existing, POINTER_AS_INT(expname));
-			}
-
-			// The export we are looking for exists but it is a forwarded export!
-			if (MOM_module_export_lib(existing, exported)) {
-				if (MOM_module_export_forward_name(existing, exported)) {
-					MOM_module_close_collection(handle);
-					return BOB_manual_map_resolve_import(process, MOM_module_export_lib(existing, exported), MOM_module_export_forward_name(existing, exported), maxhops - 1);
-				} else {
-					MOM_module_close_collection(handle);
-					return BOB_manual_map_resolve_import(process, MOM_module_export_lib(existing, exported), POINTER_FROM_INT(MOM_module_export_forward_ordinal(existing, exported)), maxhops - 1);
-				}
-			}
-
-			if (exported) {
-				MOM_module_close_collection(handle);
-
-				// The export we are looking for exists and is a normal export!
-				return MOM_module_export_memory(existing, exported);
+				return address;
 			}
 		}
 
@@ -85,7 +111,7 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 		if (exported) {
 			// Try to manual map the module into the process as well so that we can resolve the export!
 			if (BOB_manual_map_module(process, handle, 0)) {
-				MOM_module_close_collection(handle);
+				MOM_module_close_collection(&collection);
 
 				// The next time we call this #BOB_manual_map_module must have updated the loaded modules to find this one!
 				return BOB_manual_map_resolve_import(process, libname, expname, maxhops - 1);
@@ -93,42 +119,98 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 		}
 	}
 
-	MOM_module_close_collection(handle);
+	MOM_module_close_collection(&collection);
 	return NULL;
+}
+
+bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle *handle, ModuleRelocation *relocation, ptrdiff_t delta) {
+	void *real = MOM_module_get_address(handle);
+
+	switch (MOM_module_relocation_type(handle, relocation)) {
+		case kMomRelocationHigh: {
+			uint16_t value = *(uint16_t *)MOM_module_relocation_logical(handle, relocation);
+
+			value += HIWORD_UINT32(delta);
+
+			if (!MOM_process_write(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
+		} break;
+		case kMomRelocationLow: {
+			uint16_t value = *(uint16_t *)MOM_module_relocation_logical(handle, relocation);
+
+			value += LOWORD_UINT32(delta);
+
+			if (!MOM_process_write(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
+		} break;
+		case kMomRelocationHighLow: {
+			uint32_t value = *(uint32_t *)MOM_module_relocation_logical(handle, relocation);
+
+			value += delta;
+
+			if (!MOM_process_write(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
+		} break;
+		case kMomRelocationDir64: {
+			uint64_t value = *(uint64_t *)MOM_module_relocation_logical(handle, relocation);
+
+			value += delta;
+
+			if (!MOM_process_write(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
+		} break;
+		case kMomRelocationAbsolute:
+		case kMomRelocationHighAdj: {
+			// Nothing to DO!
+		} break;
+		default: {
+			/**
+			 * Unimplement relocation either by BOB or by MOM!
+			 */
+			return false;
+		} break;
+	}
+
+	return true;
 }
 
 void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int flag) {
 	ModuleHandle *existing = NULL;
 	if ((existing = MOM_process_module_find(process, handle))) {
-		return existing->real;
+		return MOM_module_get_address(existing);
 	}
 
-	size_t size = MOM_module_memory_size(handle);
+	size_t size = MOM_module_size(handle);
 
-	void *base = ((flag & kBobRebaseAlways) == 0) ? (void *)handle->base : NULL;
+	void *base = ((flag & kBobRebaseAlways) == 0) ? (void *)MOM_module_get_base(handle) : NULL;
 
 	void *real = NULL;
 	if (!(real = (uintptr_t)MOM_process_allocate(process, base, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
 		// The PE has a base address that likes to be mapped to, but if relocation data are present we can map it elsewhere!
 		if (!(real = (uintptr_t)MOM_process_allocate(process, NULL, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
-			MOM_module_close(handle);
 			return NULL;
 		}
 	}
 
-	handle->real = (uintptr_t)real;
+	MOM_module_set_address(handle, real);
 
-	fprintf(stdout, "[BOB] module %s address : 0x%p\n", MOM_module_name(handle) ? MOM_module_name(handle) : "(null)", real);
+	fprintf(stdout, "[BOB] module %s address BEGIN 0x%p END 0x%p\n", MOM_module_name(handle) ? MOM_module_name(handle) : "(null)", real, POINTER_OFFSET(real, size));
+
+	ListBase sections = MOM_module_sections(handle);
 
 	/**
 	 * Sections need to be mapped into the memory we allocate in the remote process in order to write the data from file!
 	 * \note Protection needs to be updated as well so that some sections are read-only or executable! (Below)
 	 */
 
-	for (ModuleSection *section = MOM_module_section_begin(handle); section != MOM_module_section_end(handle); section = MOM_module_section_next(handle, section)) {
-		if (!MOM_process_write(process, MOM_module_section_memory(handle, section), MOM_module_section_disk(handle, section), MOM_module_section_size(handle, section))) {
+	LISTBASE_FOREACH(ModuleSection *, section, &sections) {
+		if (!MOM_process_write(process, MOM_module_section_physical(handle, section), MOM_module_section_logical(handle, section), MOM_module_section_size(handle, section))) {
 			fprintf(stderr, "[BOB] Failed to copy section %s.\n", MOM_module_section_name(handle, section));
-			MOM_module_close(handle);
+			MOM_process_free(process, real);
 			return NULL;
 		}
 	}
@@ -145,19 +227,20 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	 * The imports especially on windows are a mess, we need to follow imports to different modules, etc...!
 	 */
 
-	for (ModuleImport *import = MOM_module_import_begin(handle); import != MOM_module_import_end(handle); import = MOM_module_import_next(handle, import)) {
+	ListBase imports = MOM_module_imports(handle);
+	LISTBASE_FOREACH(ModuleImport *, imported, &imports) {
 		void *address = NULL;
 
-		if (MOM_module_import_name(handle, import)) {
-			address = BOB_manual_map_resolve_import(process, MOM_module_import_lib(handle, import), MOM_module_import_name(handle, import), 8);
+		if (MOM_module_import_is_ordinal(handle, imported)) {
+			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), POINTER_FROM_INT(MOM_module_import_expordinal(handle, imported)), 8);
 		} else {
-			address = BOB_manual_map_resolve_import(process, MOM_module_import_lib(handle, import), POINTER_FROM_INT(MOM_module_import_ordinal(handle, import)), 8);
+			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), MOM_module_import_expname(handle, imported), 8);
 		}
 
-		if (MOM_module_import_name(handle, import)) {
-			fprintf(stdout, "[BOB] %s import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_name(handle, import));
+		if (MOM_module_import_expname(handle, imported)) {
+			fprintf(stdout, "[BOB] %s import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
 		} else {
-			fprintf(stdout, "[BOB] %s import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_ordinal(handle, import));
+			fprintf(stdout, "[BOB] %s import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
 		}
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
@@ -167,26 +250,28 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		 * These are not reasons to fail the procedure, ignore these imports...
 		 */
 		if (address) {
-			if (!MOM_process_write(process, MOM_module_import_to_memory(handle, import), &address, ptrsize)) {
-				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_to_memory(handle, import));
-				MOM_module_close(handle);
+			if (!MOM_process_write(process, MOM_module_import_physical_funk(handle, imported), &address, ptrsize)) {
+				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_physical_funk(handle, imported));
+				MOM_process_free(process, real);
 				return NULL;
 			}
 		}
 	}
-	for (ModuleImport *import = MOM_module_import_delayed_begin(handle); import != MOM_module_import_delayed_end(handle); import = MOM_module_import_delayed_next(handle, import)) {
+
+	ListBase imports_delayed = MOM_module_imports_delayed(handle);
+	LISTBASE_FOREACH(ModuleImport *, imported, &imports_delayed) {
 		void *address = NULL;
 
-		if (MOM_module_import_name(handle, import)) {
-			address = BOB_manual_map_resolve_import(process, MOM_module_import_lib(handle, import), MOM_module_import_name(handle, import), 8);
+		if (MOM_module_import_is_ordinal(handle, imported)) {
+			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), POINTER_FROM_INT(MOM_module_import_expordinal(handle, imported)), 8);
 		} else {
-			address = BOB_manual_map_resolve_import(process, MOM_module_import_lib(handle, import), POINTER_FROM_INT(MOM_module_import_ordinal(handle, import)), 8);
+			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), MOM_module_import_expname(handle, imported), 8);
 		}
 
-		if (MOM_module_import_name(handle, import)) {
-			fprintf(stdout, "[BOB] %s delayed import %s\n", (address) ? "OK" : "WARN", MOM_module_import_name(handle, import));
+		if (MOM_module_import_expname(handle, imported)) {
+			fprintf(stdout, "[BOB] %s delayed import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
 		} else {
-			fprintf(stdout, "[BOB] %s delayed import #%d\n", (address) ? "OK" : "WARN", MOM_module_import_ordinal(handle, import));
+			fprintf(stdout, "[BOB] %s delayed import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
 		}
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
@@ -196,9 +281,9 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		 * These are not reasons to fail the procedure, ignore these imports...
 		 */
 		if (address) {
-			if (!MOM_process_write(process, MOM_module_import_to_memory(handle, import), &address, ptrsize)) {
-				fprintf(stderr, "[BOB] Failed to copy delayed import to address 0x%p.\n", MOM_module_import_to_memory(handle, import));
-				MOM_module_close(handle);
+			if (!MOM_process_write(process, MOM_module_import_physical_funk(handle, imported), &address, ptrsize)) {
+				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_physical_funk(handle, imported));
+				MOM_process_free(process, real);
 				return NULL;
 			}
 		}
@@ -211,107 +296,34 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	 * and relative addressess but that is a different story...!
 	 */
 
-	ptrdiff_t delta = handle->real - handle->base;
+	ptrdiff_t delta = (const uint8_t *)MOM_module_get_address(handle) - (const uint8_t *)MOM_module_get_base(handle);
 
-	bool relocations = true;
-	for (ModuleRelocation *relocation = MOM_module_relocation_begin(handle); relocation != MOM_module_relocation_end(handle); relocation = MOM_module_relocation_next(handle, relocation)) {
-		switch (MOM_module_relocation_type(handle, relocation)) {
-			case kMomRelocationHigh: {
-				uint16_t *raw = (uint16_t *)MOM_module_relocation_memory(handle, relocation);
-				
-				uint16_t value;
-				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-
-				fprintf(stdout, "[BOB] relocate HIGH  FROM 0x%p TO ", (void *)value);
-				value += HIWORD_UINT32(delta);
-				fprintf(stdout, "0x%p\n", (void *)value);
-
-				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-			} break;
-			case kMomRelocationLow: {
-				uint16_t *raw = (uint16_t *)MOM_module_relocation_memory(handle, relocation);
-
-				uint16_t value;
-				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-
-				fprintf(stdout, "[BOB] relocate LOW   FROM 0x%p TO ", (void *)value);
-				value += LOWORD_UINT32(delta);
-				fprintf(stdout, "0x%p\n", (void *)value);
-
-				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-			} break;
-			case kMomRelocationHighLow: {
-				uint32_t *raw = (uint32_t *)MOM_module_relocation_memory(handle, relocation);
-
-				uint32_t value;
-				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-
-				fprintf(stdout, "[BOB] relocate HILOW FROM 0x%p TO ", (void *)value);
-				value += delta;
-				fprintf(stdout, "0x%p\n", (void *)value);
-
-				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-			} break;
-			case kMomRelocationDir64: {
-				uint64_t *raw = (uint64_t *)MOM_module_relocation_memory(handle, relocation);
-
-				uint64_t value;
-				if (!MOM_process_read(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to read previous value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-
-				fprintf(stdout, "[BOB] relocate DIR64 FROM 0x%p TO ", (void *)value);
-				value += delta;
-				fprintf(stdout, "0x%p\n", (void *)value);
-
-				if (!MOM_process_write(process, raw, &value, sizeof(value))) {
-					fprintf(stderr, "[BOB] Failed to write new value of relocation at 0x%p.\n", raw);
-					relocations &= false;
-				}
-			} break;
+	if (delta != 0) {
+		ListBase relocations = MOM_module_relocations(handle);
+		LISTBASE_FOREACH(ModuleRelocation *, relocation, &relocations) {
+			if (!BOB_manual_map_module_relocation_apply(process, handle, relocation, delta)) {
+				fprintf(stderr, "[BOB] Failed to apply relocation.\n");
+				MOM_process_free(process, real);
+				return NULL;
+			}
 		}
 	}
 
-	if (!relocations) {
-		MOM_module_close(handle);
-		return NULL;
-	}
+	/**
+	 * Protection needs to be updated as well so that some sections are read-only or executable!
+	 */
 
-	for (ModuleSection *section = MOM_module_section_begin(handle); section != MOM_module_section_end(handle); section = MOM_module_section_next(handle, section)) {
-		if (!MOM_process_protect(process, MOM_module_section_memory(handle, section), MOM_module_section_size(handle, section), MOM_module_section_protect(handle, section))) {
-			fprintf(stderr, "[BOB] Failed to protection section %s.\n", MOM_module_section_name(handle, section));
-			MOM_module_close(handle);
+	LISTBASE_FOREACH(ModuleSection *, section, &sections) {
+		int protection = MOM_module_section_protection(handle, section);
+		if (!MOM_process_protect(process, MOM_module_section_physical(handle, section), MOM_module_section_size(handle, section), protection)) {
+			fprintf(stderr, "[BOB] Failed to protect section %s.\n", MOM_module_section_name(handle, section));
+			MOM_process_free(process, real);
 			return NULL;
 		}
 	}
 
-	/** RtlAddFunctionTable works for Win64 and ARM architectures */
-	if (MOM_module_architecture(handle) == kMomArchitectureAmd64) {
-		void *seh = MOM_module_exception_memory(handle);
-		int count = MOM_module_exception_length(handle);
-	}
-
 	MOM_process_module_push(process, handle);
-	return real;
+	return MOM_module_get_address(handle);
 }
 
 void *BOB_manual_map_image(ProcessHandle *process, const void *image, size_t size, int flag) {
