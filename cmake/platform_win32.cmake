@@ -62,8 +62,15 @@ endmacro()
 # -----------------------------------------------------------------------------
 # Pre-Built Libraries
 
-set(PTHREADS_INCLUDE_DIRS ${LIBDIR}/pthreads/include)
-set(PTHREADS_LIBRARIES ${LIBDIR}/pthreads/lib/pthreadVC3.lib)
+if (MSVC)
+	set(PTHREADS_INCLUDE_DIRS ${LIBDIR}/pthreads/include)
+	set(PTHREADS_LIBRARIES ${LIBDIR}/pthreads/lib/pthreadVC3.lib)
 
-# Used in many places so include globally!
-include_directories(SYSTEM "${PTHREADS_INCLUDE_DIRS}")
+	# Used in many places so include globally!
+	include_directories(SYSTEM "${PTHREADS_INCLUDE_DIRS}")
+else()
+	find_package(Threads REQUIRED)
+
+	set(PTHREADS_INCLUDE_DIRS )
+	set(PTHREADS_LIBRARIES Threads::Threads)
+endif()

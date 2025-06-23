@@ -10,7 +10,7 @@
 /** \name Event Platform Specific
  * { */
 
-HANDLE *winmom_event_native(EventHandle *event) {
+HANDLE winmom_event_native(EventHandle *event) {
 	return (HANDLE)event;
 }
 

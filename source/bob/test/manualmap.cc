@@ -2,10 +2,10 @@
 
 #include "gtest/gtest.h"
 
-namespace {
-
 extern "C" const int datatoc_testdll1_dll_size;
 extern "C" const char datatoc_testdll1_dll[];
+
+namespace {
 
 TEST(BobManualMap, Local) {
 	ProcessHandle *self = MOM_process_self();

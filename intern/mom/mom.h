@@ -31,6 +31,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <string.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -40,6 +41,11 @@ extern "C" {
 #define MOM_MAX_DLLNAME_LEN 256
 #define MOM_MAX_EXPNAME_LEN 256
 #define MOM_MAX_LIBNAME_LEN 256
+
+struct ProcessHandle;
+struct ModuleHandle;
+struct ThreadHandle;
+struct EventHandle;
 
 /* -------------------------------------------------------------------- */
 /** \name Architecture

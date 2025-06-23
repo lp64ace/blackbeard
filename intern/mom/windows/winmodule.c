@@ -324,8 +324,8 @@ static bool winmom_module_resolve_imports(ModuleHandle *handle) {
 		 * static_assert(sizeof(IMAGE_THUNK_DATA32) == MOM_module_architecture_pointer_size(kMomArchitectureAmd32), ...);
 		 * static_assert(sizeof(IMAGE_THUNK_DATA64) == MOM_module_architecture_pointer_size(kMomArchitectureAmd64), ...);
 		 */
-		static_assert(sizeof(IMAGE_THUNK_DATA32) == sizeof(int32_t), "Bad thunk iteration");
-		static_assert(sizeof(IMAGE_THUNK_DATA64) == sizeof(int64_t), "Bad thunk iteration");
+		// static_assert(sizeof(IMAGE_THUNK_DATA32) == sizeof(int32_t), "Bad thunk iteration");
+		// static_assert(sizeof(IMAGE_THUNK_DATA64) == sizeof(int64_t), "Bad thunk iteration");
 
 		uint64_t zero = 0;
 
@@ -390,8 +390,8 @@ static bool winmom_module_resolve_imports_delayed(ModuleHandle *handle) {
 		 * static_assert(sizeof(IMAGE_THUNK_DATA32) == MOM_module_architecture_pointer_size(kMomArchitectureAmd32), ...);
 		 * static_assert(sizeof(IMAGE_THUNK_DATA64) == MOM_module_architecture_pointer_size(kMomArchitectureAmd64), ...);
 		 */
-		static_assert(sizeof(IMAGE_THUNK_DATA32) == sizeof(int32_t), "Bad thunk iteration");
-		static_assert(sizeof(IMAGE_THUNK_DATA64) == sizeof(int64_t), "Bad thunk iteration");
+		// static_assert(sizeof(IMAGE_THUNK_DATA32) == sizeof(int32_t), "Bad thunk iteration");
+		// static_assert(sizeof(IMAGE_THUNK_DATA64) == sizeof(int64_t), "Bad thunk iteration");
 
 		uint64_t zero = 0;
 

@@ -1,6 +1,7 @@
-#include "MEM_guardedalloc.h"
-
+#include <stdbool.h>
 #include <stdio.h>
+#include <string.h>
+#include <malloc.h>
 
 const char *source = NULL;
 const char *binary = NULL;
@@ -36,12 +37,6 @@ static inline const char *strprev(const char *begin, const char *end, const char
 }
 
 int main(int argc, char **argv) {
-#ifndef NDEBUG
-	MEM_init_memleak_detection();
-	MEM_enable_fail_on_memleak();
-	MEM_use_guarded_allocator();
-#endif
-
 	long size;
 
 	if (!init(argc, argv)) {

@@ -55,7 +55,7 @@ TEST(MomLocal, Exports) {
 
 #ifdef WIN32
 				if (!MOM_module_export_is_ordinal(handle, exported)) {
-					void *correct = GetProcAddress(LoadLibrary(_T("kernel32.dll")), MOM_module_export_name(handle, exported));
+					void *correct = (void *)GetProcAddress(LoadLibrary(_T("kernel32.dll")), MOM_module_export_name(handle, exported));
 
 					/**
 					 * This way we know that we did in fact resolve the correct name + address!

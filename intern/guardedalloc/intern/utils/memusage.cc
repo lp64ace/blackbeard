@@ -1,7 +1,9 @@
 #include "memusage.h"
+
 #include <algorithm>
 #include <atomic>
 #include <cassert>
+#include <climits>
 #include <iostream>
 #include <memory>
 #include <mutex>
