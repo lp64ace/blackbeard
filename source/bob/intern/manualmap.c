@@ -1,4 +1,5 @@
 #include "manualmap.h"
+#include "remote.h"
 
 #include "defines.h"
 #include "mom.h"
@@ -49,18 +50,11 @@ void *BOB_manual_map_resolve_import_ex(ProcessHandle *process, ModuleHandle *exi
 	return NULL;
 }
 
-// TODO Slow as fuck! Hopefully we can fix that at some point!
 void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname, const char *expname, int maxhops) {
 	ListBase collection;
 	LIB_listbase_clear(&collection);
 	
 	void *address = NULL;
-
-	/**
-	 * TODO: In order to make this routine faster we need to make the following code faster!
-	 * #MOM_process_module_find_by_name is slow because it goes through the windows schema table, 
-	 * we need to cash ALL these entries in a red-black tree to quickly iterate them!
-	 */
 
 	ModuleHandle *existing = NULL;
 	if ((existing = MOM_process_module_find_by_name(process, libname))) {
@@ -110,7 +104,7 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 
 		if (exported) {
 			// Try to manual map the module into the process as well so that we can resolve the export!
-			if (BOB_manual_map_module(process, handle, 0)) {
+			if (BOB_manual_map_module(process, handle, kBobDependency)) {
 				MOM_module_close_collection(&collection);
 
 				// The next time we call this #BOB_manual_map_module must have updated the loaded modules to find this one!
@@ -128,7 +122,10 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 
 	switch (MOM_module_relocation_type(handle, relocation)) {
 		case kMomRelocationHigh: {
-			uint16_t value = *(uint16_t *)MOM_module_relocation_logical(handle, relocation);
+			uint16_t value;
+			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
 
 			value += HIWORD_UINT32(delta);
 
@@ -137,7 +134,10 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 			}
 		} break;
 		case kMomRelocationLow: {
-			uint16_t value = *(uint16_t *)MOM_module_relocation_logical(handle, relocation);
+			uint16_t value;
+			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
 
 			value += LOWORD_UINT32(delta);
 
@@ -146,7 +146,10 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 			}
 		} break;
 		case kMomRelocationHighLow: {
-			uint32_t value = *(uint32_t *)MOM_module_relocation_logical(handle, relocation);
+			uint32_t value;
+			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
 
 			value += delta;
 
@@ -155,7 +158,10 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 			}
 		} break;
 		case kMomRelocationDir64: {
-			uint64_t value = *(uint64_t *)MOM_module_relocation_logical(handle, relocation);
+			uint64_t value;
+			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
+				return false;
+			}
 
 			value += delta;
 
@@ -182,6 +188,20 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	ModuleHandle *existing = NULL;
 	if ((existing = MOM_process_module_find(process, handle))) {
 		return MOM_module_get_address(existing);
+	}
+
+	if ((flag & kBobDependency) != 0) {
+		RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
+
+		void *real = NULL;
+		if ((real = BOB_remote_load_dep(worker, handle))) {
+			MOM_module_set_address(handle, real);
+		}
+
+		BOB_remote_worker_close(worker);
+
+		MOM_process_module_push(process, handle);
+		return real;
 	}
 
 	size_t size = MOM_module_size(handle);
@@ -309,6 +329,10 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		}
 	}
 
+	fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
+	fprintf(stdout, "%s\n", (const char *)MOM_module_manifest_logical(handle));
+	fprintf(stdout, "[BOB] Manifest END--------------------------------------------------------------\n");
+
 	/**
 	 * Protection needs to be updated as well so that some sections are read-only or executable!
 	 */
@@ -320,6 +344,38 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			MOM_process_free(process, real);
 			return NULL;
 		}
+	}
+
+	/**
+	 * TODO: Move these the fuck out of here! (move to remote.cc)
+	 */
+
+	eMomArchitecture architecture = MOM_module_architecture(handle);
+
+	bool install = true;
+
+	RemoteWorker *worker = BOB_remote_worker_open(process, architecture);
+	if (worker) {
+		if (MOM_module_manifest_logical(handle)) {
+			if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
+				install &= false;
+			}
+		}
+
+		if (!BOB_remote_build_seh(worker, real, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
+			install &= false;
+		}
+
+		if (!BOB_remote_call_entry(worker, real, MOM_module_entry_physical(handle), architecture)) {
+			install &= false; // When this happens sometimes the remote process crashes!
+		}
+
+		BOB_remote_worker_close(worker);
+	}
+
+	if (!install) {
+		MOM_process_free(process, real);
+		return NULL;
 	}
 
 	MOM_process_module_push(process, handle);

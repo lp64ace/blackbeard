@@ -118,6 +118,8 @@ typedef struct ModuleHandle {
 	ListBase tls;
 
 	uintptr_t exceptions;
+	uintptr_t manifest_begin;
+	uintptr_t manifest_end;
 	
 	/**
 	 * The following can be used however the native implementation deems appropriate!

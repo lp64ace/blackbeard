@@ -55,12 +55,13 @@ typedef struct SchemaEntry {
 	struct SchemaEntry *perv, *next;
 
 	/**
-	 * These are the entries so we do not care about the logical names!
+	 * The logical name is not of interest we only care about the physical value!
 	 */
 	char physical[MOM_MAX_DLLNAME_LEN];
 } SchemaEntry;
 
 typedef NTSTATUS(NTAPI *fnNtQueryInformationProcess)(IN HANDLE ProcessHandle, IN PROCESSINFOCLASS ProcessInformationClass, OUT PVOID ProcessInformation, IN ULONG ProcessInformationLength, OUT PULONG ReturnLength OPTIONAL);
+typedef NTSTATUS(NTAPI *fnNtCreateThreadEx)(OUT PHANDLE ThreadHandle, IN ACCESS_MASK DesiredAccess, IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL, IN HANDLE ProcessHandle, IN LPVOID Routine, IN PVOID Argument OPTIONAL, IN ULONG CreateFlags, IN SIZE_T ZeroBits, IN SIZE_T StackSize, IN SIZE_T MaximumStackSize, IN LPVOID AttributeList OPTIONAL);
 
 /** \} */
 
@@ -82,6 +83,7 @@ ListBase winmom_process_resolve_schema(const char *logical);
 
 HANDLE winmom_process_handle(const struct ProcessHandle *handle);
 LPVOID winmom_process_peb(const struct ProcessHandle *handle, PEB *peb);
+LPVOID winmom_current_peb(PEB *peb);
 
 /** \} */
 

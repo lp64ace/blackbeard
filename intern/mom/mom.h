@@ -52,14 +52,26 @@ typedef struct ModuleImport ModuleImport;
 typedef struct ModuleRelocation ModuleRelocation;
 typedef struct ModuleTLS ModuleTLS;
 typedef struct ModuleException ModuleException;
-typedef struct ProcessHandle ProcessHandle;
-typedef struct ThreadHandle ThreadHandle;
 
 typedef enum eMomArchitecture {
 	kMomArchitectureNone,
 	kMomArchitectureAmd32,
 	kMomArchitectureAmd64,
 } eMomArchitecture;
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Architecture
+ * { */
+
+size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Modules
+ * { */
 
 typedef ListBase (*fnMOM_module_open_by_file)(const char *filepath);
 typedef ListBase (*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
@@ -128,42 +140,19 @@ typedef void *(*fnMOM_module_relocation_logical)(const struct ModuleHandle *hand
 // Even if this doesn't return NULL the return address may not be owned by this process!
 typedef void *(*fnMOM_module_relocation_physical)(const struct ModuleHandle *handle, const struct ModuleRelocation *relocation);
 
-typedef enum eMomMemoryProtect {
-	kMomProtectNone = 0,
-	kMomProtectRead = (1 << 0),
-	kMomProtectWrite = (1 << 1),
-	kMomProtectExec = (1 << 2),
-} eMomMemoryProtect;
+typedef size_t (*fnMOM_module_seh_count)(const struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_seh_logical)(const struct ModuleHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_seh_physical)(const struct ModuleHandle *handle);
 
-typedef ListBase (*fnMOM_process_open_by_name)(const char *name);
-typedef struct ProcessHandle *(*fnMOM_process_open)(int identifier);
-typedef struct ProcessHandle *(*fnMOM_process_self)(void);
-typedef void *(*fnMOM_process_allocate)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
-typedef bool (*fnMOM_process_protect)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
-typedef size_t (*fnMOM_process_write)(struct ProcessHandle *handle, void *address, const void *buffer, size_t size);
-typedef size_t (*fnMOM_process_read)(struct ProcessHandle *handle, const void *address, void *buffer, size_t size);
-typedef void (*fnMOM_process_free)(struct ProcessHandle *handle, void *address);
-typedef void (*fnMOM_process_close)(struct ProcessHandle *handle);
-typedef void (*fnMOM_process_close_collection)(ListBase *lb);
-typedef int (*fnMOM_process_identifier)(const struct ProcessHandle *handle);
+typedef size_t (*fnMOM_module_manifest_size)(const struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_manifest_logical)(const struct ModuleHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_manifest_physical)(const struct ModuleHandle *handle);
 
-typedef ModuleHandle *(*fnMOM_process_module_find_by_name)(struct ProcessHandle *process, const char *name);
-typedef ModuleHandle *(*fnMOM_process_module_push)(struct ProcessHandle *process, const ModuleHandle *handle);
-typedef ModuleHandle *(*fnMOM_process_module_find)(struct ProcessHandle *process, const ModuleHandle *handle);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Architecture
- * { */
-
-size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
-
-/** \} */
-
-/* -------------------------------------------------------------------- */
-/** \name Modules
- * { */
+typedef void *(*fnMOM_module_entry_logical)(const struct ModuleHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_entry_physical)(const struct ModuleHandle *handle);
 
 // This can return a collection of modules when the name exists in the schema API
 extern fnMOM_module_open_by_file MOM_module_open_by_file;
@@ -227,16 +216,57 @@ extern fnMOM_module_relocation_logical MOM_module_relocation_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
 extern fnMOM_module_relocation_physical MOM_module_relocation_physical;
 
+extern fnMOM_module_seh_count MOM_module_seh_count;
+extern fnMOM_module_seh_logical MOM_module_seh_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_seh_physical MOM_module_seh_physical;
+
+extern fnMOM_module_manifest_size MOM_module_manifest_size;
+extern fnMOM_module_manifest_logical MOM_module_manifest_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_manifest_physical MOM_module_manifest_physical;
+
+extern fnMOM_module_entry_logical MOM_module_entry_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_entry_physical MOM_module_entry_physical;
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
 /** \name Process
  * { */
 
+typedef struct ProcessHandle ProcessHandle;
+
+typedef enum eMomMemoryProtect {
+	kMomProtectNone = 0,
+	kMomProtectRead = (1 << 0),
+	kMomProtectWrite = (1 << 1),
+	kMomProtectExec = (1 << 2),
+} eMomMemoryProtect;
+
+typedef ListBase (*fnMOM_process_open_by_name)(const char *name);
+typedef struct ProcessHandle *(*fnMOM_process_open)(int identifier);
+typedef struct ProcessHandle *(*fnMOM_process_self)(void);
+typedef void *(*fnMOM_process_native)(const struct ProcessHandle *handle);
+typedef void *(*fnMOM_process_allocate)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
+typedef bool (*fnMOM_process_protect)(struct ProcessHandle *handle, const void *address, size_t size, int protect);
+typedef size_t (*fnMOM_process_write)(struct ProcessHandle *handle, void *address, const void *buffer, size_t size);
+typedef size_t (*fnMOM_process_read)(struct ProcessHandle *handle, const void *address, void *buffer, size_t size);
+typedef void (*fnMOM_process_free)(struct ProcessHandle *handle, void *address);
+typedef void (*fnMOM_process_close)(struct ProcessHandle *handle);
+typedef void (*fnMOM_process_close_collection)(ListBase *lb);
+typedef int (*fnMOM_process_identifier)(const struct ProcessHandle *handle);
+
+typedef ModuleHandle *(*fnMOM_process_module_find_by_name)(struct ProcessHandle *process, const char *name);
+typedef ModuleHandle *(*fnMOM_process_module_push)(struct ProcessHandle *process, const ModuleHandle *handle);
+typedef ModuleHandle *(*fnMOM_process_module_find)(struct ProcessHandle *process, const ModuleHandle *handle);
+
 // This can return a collection of processes when there are mutiple application with this name
 extern fnMOM_process_open_by_name MOM_process_open_by_name;
 extern fnMOM_process_open MOM_process_open;
 extern fnMOM_process_self MOM_process_self;
+extern fnMOM_process_native MOM_process_native;
 extern fnMOM_process_allocate MOM_process_allocate;
 extern fnMOM_process_protect MOM_process_protect;
 extern fnMOM_process_write MOM_process_write;
@@ -250,6 +280,32 @@ extern fnMOM_process_identifier MOM_process_identifier;
 extern fnMOM_process_module_push MOM_process_module_push;
 extern fnMOM_process_module_find MOM_process_module_find;
 extern fnMOM_process_module_find_by_name MOM_process_module_find_by_name;
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Thread
+ * { */
+
+typedef struct ThreadHandle ThreadHandle;
+
+typedef struct ThreadHandle *(*fnMOM_thread_open)(int identifier);
+typedef struct ThreadHandle *(*fnMOM_thread_spawn)(struct ProcessHandle *process, void *entry, void *param);
+typedef void (*fnMOM_thread_close)(struct ThreadHandle *handle);
+typedef bool (*fnMOM_thread_terminate)(struct ThreadHandle *handle, int code);
+typedef bool (*fnMOM_thread_join)(struct ThreadHandle *handle);
+typedef bool (*fnMOM_thread_suspend)(struct ThreadHandle *handle);
+typedef bool (*fnMOM_thread_resume)(struct ThreadHandle *handle);
+typedef int (*fnMOM_thread_identifier)(const struct ThreadHandle *handle);
+
+extern fnMOM_thread_open MOM_thread_open;
+extern fnMOM_thread_spawn MOM_thread_spawn;
+extern fnMOM_thread_close MOM_thread_close;
+extern fnMOM_thread_terminate MOM_thread_terminate;
+extern fnMOM_thread_join MOM_thread_join;
+extern fnMOM_thread_suspend MOM_thread_suspend;
+extern fnMOM_thread_resume MOM_thread_resume;
+extern fnMOM_thread_identifier MOM_thread_identifier;
 
 /** \} */
 

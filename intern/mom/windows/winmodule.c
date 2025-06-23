@@ -480,6 +480,52 @@ bool winmom_module_resolve_relocations(ModuleHandle *handle) {
 	return true;
 }
 
+static bool winmom_module_resolve_exceptions(ModuleHandle *handle) {
+	handle->exceptions = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+
+	return true;
+}
+
+static bool winmom_module_resolve_manifest(ModuleHandle *handle) {
+	IMAGE_RESOURCE_DIRECTORY *resource = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_RESOURCE);
+
+	if (!resource) {
+		return true;
+	}
+
+	uintptr_t rootoffset = sizeof(IMAGE_RESOURCE_DIRECTORY);
+	IMAGE_RESOURCE_DIRECTORY *root = resource;
+	for (size_t i = 0; i < root->NumberOfIdEntries + root->NumberOfNamedEntries; i++) {
+		IMAGE_RESOURCE_DIRECTORY_ENTRY *entry = POINTER_OFFSET(resource, rootoffset);
+
+		if (entry->DataIsDirectory == NULL || entry->Id != 0x18) {
+			rootoffset += sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY);
+			continue;
+		}
+
+		uintptr_t diroffset = entry->OffsetToDirectory + sizeof(IMAGE_RESOURCE_DIRECTORY);
+		IMAGE_RESOURCE_DIRECTORY *directory = POINTER_OFFSET(resource, entry->OffsetToDirectory);
+		for (size_t j = 0; j < directory->NumberOfIdEntries + directory->NumberOfNamedEntries; j++) {
+			IMAGE_RESOURCE_DIRECTORY_ENTRY *item = POINTER_OFFSET(resource, diroffset);
+
+			if (item->DataIsDirectory == NULL || (item->Id != 1 && item->Id != 2 && item->Id != 3)) {
+				diroffset += sizeof(IMAGE_RESOURCE_DIRECTORY_ENTRY);
+				continue;
+			}
+
+			uintptr_t langoffset = item->OffsetToDirectory + sizeof(IMAGE_RESOURCE_DIRECTORY);
+			IMAGE_RESOURCE_DIRECTORY_ENTRY *lang = POINTER_OFFSET(resource, langoffset);
+			IMAGE_RESOURCE_DATA_ENTRY *data = POINTER_OFFSET(resource, lang->OffsetToData);
+
+			handle->manifest_begin = data->OffsetToData;
+			handle->manifest_end = data->OffsetToData + data->Size;
+			return true;
+		}
+	}
+
+	return true;
+}
+
 static bool winmom_module_resolve(ModuleHandle *handle) {
 	if (!winmom_module_resolve_sections(handle)) {
 		return false;
@@ -496,9 +542,16 @@ static bool winmom_module_resolve(ModuleHandle *handle) {
 	if (!winmom_module_resolve_relocations(handle)) {
 		return false;
 	}
+	if (!winmom_module_resolve_exceptions(handle)) {
+		return false;
+	}
+	if (!winmom_module_resolve_manifest(handle)) {
+		return false;
+	}
 	return true;
 }
 
+// Slow?
 bool winmom_module_loaded_match_name(const char *asbolute, const char *name) {
 	if (!asbolute) {
 		return false;
@@ -810,6 +863,63 @@ void *winmom_module_relocation_physical(const ModuleHandle *handle, const Module
 	return winmom_module_resolve_virtual_address_to_memory(handle, exported->va);
 }
 
+size_t winmom_module_seh_count(const ModuleHandle *handle) {
+	size_t size = winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+	return size / sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY);
+}
+
+void *winmom_module_seh_logical(const ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_image(handle, handle->exceptions);
+}
+
+void *winmom_module_seh_physical(const ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_memory(handle, handle->exceptions);
+}
+
+size_t winmom_module_manifest_size(const ModuleHandle *handle) {
+	return handle->manifest_end - handle->manifest_begin;
+}
+
+void *winmom_module_manifest_logical(const ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_image(handle, handle->manifest_begin);
+}
+
+void *winmom_module_manifest_physical(const ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_memory(handle, handle->manifest_begin);
+}
+
+void *winmom_module_entry_logical(const ModuleHandle *handle) {
+	switch (MOM_module_architecture(handle)) {
+		case kMomArchitectureAmd32: {
+			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+
+			return winmom_module_resolve_virtual_address_to_image(handle, nt->OptionalHeader.AddressOfEntryPoint);
+		} break;
+		case kMomArchitectureAmd64: {
+			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+
+			return winmom_module_resolve_virtual_address_to_image(handle, nt->OptionalHeader.AddressOfEntryPoint);
+		} break;
+	}
+	return 0;
+}
+
+void *winmom_module_entry_physical(const ModuleHandle *handle) {
+	switch (MOM_module_architecture(handle)) {
+		case kMomArchitectureAmd32: {
+			const IMAGE_NT_HEADERS32 *nt = NT32(handle);
+
+			return winmom_module_resolve_virtual_address_to_memory(handle, nt->OptionalHeader.AddressOfEntryPoint);
+		} break;
+		case kMomArchitectureAmd64: {
+			const IMAGE_NT_HEADERS64 *nt = NT64(handle);
+
+			return winmom_module_resolve_virtual_address_to_memory(handle, nt->OptionalHeader.AddressOfEntryPoint);
+		} break;
+	}
+	return 0;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -845,5 +955,16 @@ fnMOM_module_relocation_logical MOM_module_relocation_logical = winmom_module_re
 fnMOM_module_relocation_physical MOM_module_relocation_physical = winmom_module_relocation_physical;
 
 fnMOM_module_header_is_valid MOM_module_header_is_valid = winmom_module_header_is_valid;
+
+fnMOM_module_seh_count MOM_module_seh_count = winmom_module_seh_count;
+fnMOM_module_seh_logical MOM_module_seh_logical = winmom_module_seh_logical;
+fnMOM_module_seh_physical MOM_module_seh_physical = winmom_module_seh_physical;
+
+fnMOM_module_manifest_size MOM_module_manifest_size = winmom_module_manifest_size;
+fnMOM_module_manifest_logical MOM_module_manifest_logical = winmom_module_manifest_logical;
+fnMOM_module_manifest_physical MOM_module_manifest_physical = winmom_module_manifest_physical;
+
+fnMOM_module_entry_logical MOM_module_entry_logical = winmom_module_entry_logical;
+fnMOM_module_entry_physical MOM_module_entry_physical = winmom_module_entry_physical;
 
 /** \} */

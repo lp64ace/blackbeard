@@ -5,14 +5,7 @@
 #include <pthread.h>
 #include <stdio.h>
 
-static pthread_t thread;
-
-volatile bool stop = false;
-void *loop(void *userdata) {
-	while (!stop) {
-		fprintf(stdout, "Hello, this is testdll1.c\n");
-	}
-}
+int count = 16;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 	switch (dwReason) {
@@ -25,16 +18,12 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 				(void)freopen("CONOUT$", "w", stdout);
 			}
 			
-			if (pthread_create(&thread, NULL, loop, (void *)NULL) != 0) {
-				return FALSE;
+			while (count--) {
+				fprintf(stdout, "Hello, this is testdll1.c\n");
 			}
 		} break;
 		case DLL_PROCESS_DETACH: {
-			stop = true;
-			
-			if (pthread_join(thread, NULL) != 0) {
-				return FALSE;
-			}
+			// Nothing to do!
 		} break;
 	}
 	

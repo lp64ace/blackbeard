@@ -117,10 +117,8 @@ ListBase winmom_process_resolve_schema(const char *schemaname) {
 	ListBase list;
 	LIB_listbase_clear(&list);
 
-	ProcessHandle *self = MOM_process_self();
-
 	PEB peb;
-	if (winmom_process_peb(self, &peb)) {
+	if (winmom_current_peb(&peb)) {
 		do {
 			if (!peb.Reserved9[0]) {
 				break;
@@ -161,7 +159,6 @@ ListBase winmom_process_resolve_schema(const char *schemaname) {
 		} while (false);
 	}
 
-	MOM_process_close(self);
 	return list;
 }
 
@@ -180,6 +177,19 @@ LPVOID winmom_process_peb(const ProcessHandle *handle, PEB *peb) {
 	if (!MOM_process_read(handle, information.PebBaseAddress, peb, sizeof(PEB))) {
 		return false;
 	}
+
+	return ((PEB *)peb)->Reserved3[1];
+}
+
+LPVOID winmom_current_peb(PEB *peb) {
+	PROCESS_BASIC_INFORMATION information;
+
+	HMODULE ntdll = LoadLibrary(_T("ntdll.dll"));
+	fnNtQueryInformationProcess _NtQueryInformationProcess = (fnNtQueryInformationProcess)GetProcAddress(ntdll, "NtQueryInformationProcess");
+	if (!NT_SUCCESS(_NtQueryInformationProcess(GetCurrentProcess(), ProcessBasicInformation, &information, sizeof(information), NULL))) {
+		return false;
+	}
+	memcpy(peb, information.PebBaseAddress, sizeof(PEB));
 
 	return ((PEB *)peb)->Reserved3[1];
 }
@@ -358,6 +368,12 @@ ModuleHandle *winmom_process_module_find_by_name(ProcessHandle *handle, const ch
 
 	ModuleHandle *module = NULL;
 
+	/**
+	 * The following part is the slowest and most unoptimized part of the library!
+	 * 
+	 * TODO fix that!
+	 */
+
 	ListBase schema = winmom_process_resolve_schema(name);
 	LISTBASE_FOREACH(SchemaEntry *, entry, &schema) {
 		LISTBASE_FOREACH(ModuleHandle *, itr, &handle->modules) {
@@ -380,6 +396,7 @@ ModuleHandle *winmom_process_module_find_by_name(ProcessHandle *handle, const ch
 fnMOM_process_open_by_name MOM_process_open_by_name = winmom_process_open_by_name;
 fnMOM_process_open MOM_process_open = winmom_process_open;
 fnMOM_process_self MOM_process_self = winmom_process_self;
+fnMOM_process_native MOM_process_native = winmom_process_handle;
 fnMOM_process_allocate MOM_process_allocate = winmom_process_allocate;
 fnMOM_process_protect MOM_process_protect = winmom_process_protect;
 fnMOM_process_write MOM_process_write = winmom_process_write;

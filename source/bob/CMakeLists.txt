@@ -23,8 +23,10 @@ set(INC_SYS
 
 set(SRC
 	manualmap.h
+	remote.h
 	
 	intern/manualmap.c
+	intern/remote.cc
 
 )
 
@@ -39,7 +41,7 @@ set(LIB
 	PUBLIC bob::intern::mom
 	
 	# External Library Dependencies
-	${PTHREADS_LIBRARIES}
+	PUBLIC ${PTHREADS_LIBRARIES}
 	
 )
 
@@ -81,7 +83,6 @@ set(INC
 
 set(INC_SYS
 	# External System Include Directories
-	${PTHREADS_INCLUDE_DIRS}
 	
 )
 
@@ -104,7 +105,6 @@ set(LIB
 	bob::source::bob
 	
 	# External Library Dependencies
-	${PTHREADS_LIBRARIES}
 	
 )
 

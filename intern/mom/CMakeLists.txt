@@ -31,6 +31,7 @@ set(SRC_WIN
 	windows/winmodule.c
 	windows/winmom.h
 	windows/winprocess.c
+	windows/winthread.c
 	
 )
 

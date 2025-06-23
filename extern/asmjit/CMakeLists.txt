@@ -191,3 +191,5 @@ set(LIB
 
 bob_add_lib(asmjit "${SRC}" "${INC}" "${INC_SYS}" "${LIB}")
 add_library(bob::extern::asmjit ALIAS asmjit)
+
+# TODO I do not like this abomination of a library make prebuilt binaries!
