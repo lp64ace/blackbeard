@@ -36,6 +36,10 @@ class RemoteWorkerImplementation {
 
 protected:
 	static void begin_call64(asmjit::x86::Assembler &ASM) {
+		if (!ASM.is64Bit()) {
+			return;
+		}
+
 		ASM.sub(asmjit::x86::rsp, asmjit::imm(0x28));
 
 		ASM.mov(asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x8), asmjit::x86::rcx);  // MOV [RSP + 0x08], RCX
@@ -45,6 +49,10 @@ protected:
 	}
 
 	static void end_call64(asmjit::x86::Assembler &ASM) {
+		if (!ASM.is64Bit()) {
+			return;
+		}
+
 		ASM.mov(asmjit::x86::rcx, asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x08)); // MOV RCX, QWORD PTR [RSP + 0x08]
 		ASM.mov(asmjit::x86::rdx, asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x10)); // MOV RDX, QWORD PTR [RSP + 0x10]
 		ASM.mov(asmjit::x86::r8, asmjit::x86::qword_ptr(asmjit::x86::rsp, 0x18));  // MOV R8 , QWORD PTR [RSP + 0x18]
@@ -747,40 +755,24 @@ void *BOB_remote_load_dep(RemoteWorker *vworker, ModuleHandle *handle) {
 	return module;
 }
 
-bool BOB_remote_call_entry(RemoteWorker *worker, void *real, void *entry, eMomArchitecture architecture) {
+bool BOB_remote_call_entry(RemoteWorker *worker, void *real, void *entry) {
 	if (!entry) {
 		return true;
 	}
 
-	switch (architecture) {
-		case kMomArchitectureAmd32: {
-			BOB_remote_push(worker, POINTER_AS_UINT(real), kBobNoDeref);
-			BOB_remote_push(worker, 1, kBobNoDeref); // DLL_PROCESS_ATTACH
-			BOB_remote_push(worker, 0, kBobNoDeref);
-			BOB_remote_call(worker, kBobStdcall, entry);
-			BOB_remote_save(worker, 0);
-			BOB_remote_notify(worker);
+	BOB_remote_begin64(worker);
+	BOB_remote_bind_manifest(worker);
+	BOB_remote_push(worker, reinterpret_cast<uint64_t>(real), kBobNoDeref);
+	BOB_remote_push(worker, 1, kBobNoDeref); // DLL_PROCESS_ATTACH
+	BOB_remote_push(worker, 0, kBobNoDeref);
+	BOB_remote_call(worker, kBobWin64, entry);
+	BOB_remote_save(worker, 0);
+	BOB_remote_unbind_manifest(worker);
+	BOB_remote_notify(worker);
+	BOB_remote_end64(worker);
 
-			if (!BOB_remote_exec(worker, NULL)) {
-				return false;
-			}
-		} break;
-		case kMomArchitectureAmd64: {
-			BOB_remote_begin64(worker);
-			BOB_remote_bind_manifest(worker);
-			BOB_remote_push(worker, reinterpret_cast<uint64_t>(real), kBobNoDeref);
-			BOB_remote_push(worker, 1, kBobNoDeref); // DLL_PROCESS_ATTACH
-			BOB_remote_push(worker, 0, kBobNoDeref);
-			BOB_remote_call(worker, kBobWin64, entry);
-			BOB_remote_save(worker, 0);
-			BOB_remote_unbind_manifest(worker);
-			BOB_remote_notify(worker);
-			BOB_remote_end64(worker);
-
-			if (!BOB_remote_exec(worker, NULL)) {
-				return false;
-			}
-		} break;
+	if (!BOB_remote_exec(worker, NULL)) {
+		return false;
 	}
 
 	return true;
