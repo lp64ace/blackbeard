@@ -1,6 +1,17 @@
 # Prerequisites
 *.d
 
+# Vim swap files
+*.swp
+*.swo
+*.swn
+
+# Vim backup files
+*~
+
+# Vim undo files
+*.un~
+
 # Object files
 *.o
 *.ko
