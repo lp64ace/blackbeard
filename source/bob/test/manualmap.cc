@@ -18,10 +18,20 @@ TEST(BobManualMap, Local) {
 }
 
 TEST(BobManualMap, Other) {
-	ListBase processes = MOM_process_open_by_name("notepad.exe");
-	if (LIB_listbase_is_empty(&processes)) {
+	ListBase processes;
+	do {
+		processes = MOM_process_open_by_name("notepad.exe"); // Windows 10
+		if (!LIB_listbase_is_empty(&processes)) {
+			break;
+		}
+
+		processes = MOM_process_open_by_name("Notepad.exe"); // Windows 11
+		if (!LIB_listbase_is_empty(&processes)) {
+			break;
+		}
+
 		GTEST_SKIP();
-	}
+	} while (false);
 
 	ProcessHandle *process = (ProcessHandle *)processes.first;
 
