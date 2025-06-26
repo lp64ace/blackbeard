@@ -427,8 +427,9 @@ public:
 		void *code;
 		if ((code = this->make())) {
 			MOM_thread_queue_apc(thread, code, argument);
-			if (!MOM_event_wait(evtlocal, 3000)) {
-				// return 0;
+			if (!MOM_event_wait(evtlocal, 100)) {
+				fprintf(stderr, "[BOB] shellcode timed out!\n");
+				return 0;
 			}
 			MOM_event_reset(this->evtlocal);
 			/**
