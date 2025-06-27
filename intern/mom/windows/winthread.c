@@ -6,12 +6,35 @@
 
 #include <tlhelp32.h>
 
+typedef struct _MOM_THREAD_BASIC_INFORMATION {
+	NTSTATUS ExitStatus;
+	PVOID TebBaseAddress;
+	CLIENT_ID ClientId;
+	ULONG_PTR AffinityMask;
+	LONG Priority;
+	LONG BasePriority;
+} MOM_THREAD_BASIC_INFORMATION, *MOM_PTHREAD_BASIC_INFORMATION;
+
 /* -------------------------------------------------------------------- */
 /** \name Thread Platform Dependent
  * { */
 
 HANDLE winmom_thread_handle(const ThreadHandle *handle) {
 	return (HANDLE)handle;
+}
+
+LPVOID winmom_thread_teb(ProcessHandle *process, ThreadHandle *thread, TEB *teb) {
+	MOM_THREAD_BASIC_INFORMATION information;
+
+	fnNtQueryInformationThread _NtQueryInformationThread = (fnNtQueryInformationThread)winmom_resolve_proc("ntdll.dll", "NtQueryInformationThread");
+	if (!NT_SUCCESS(_NtQueryInformationThread(winmom_thread_handle(thread), 0, &information, sizeof(information), NULL))) {
+		return NULL;
+	}
+	if (!MOM_process_read(process, information.TebBaseAddress, teb, sizeof(TEB))) {
+		return NULL;
+	}
+
+	return information.TebBaseAddress;
 }
 
 /** \} */
@@ -69,6 +92,29 @@ bool winmom_thread_join(ThreadHandle *handle) {
 	return WaitForSingleObject(winmom_thread_handle(handle), INFINITE) == WAIT_OBJECT_0;
 }
 
+/**
+ * This was used when the DLL that we are mapping only contains static TLS data and does not spawn new threads, 
+ * when new threads start spawning the static TLS data are not copied over to the other threads!
+ */
+bool winmom_thread_static_tls_set(ProcessHandle *process, ThreadHandle *thread, int index, const void *data, size_t size) {
+	void *address;
+
+	TEB teb;
+	if ((address = winmom_thread_teb(process, thread, &teb))) {
+		LPVOID *entry = ((DWORD *)teb.Reserved1[11]) + index;
+
+		void *allocated;
+		if (!(allocated = MOM_process_allocate(process, NULL, size, MOM_PROTECT_R | MOM_PROTECT_W))) {
+			return false;
+		}
+		MOM_process_write(process, allocated, data, size);
+		MOM_process_write(process, entry, &allocated, sizeof(allocated));
+		return true;
+	}
+
+	return false;
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -84,5 +130,7 @@ fnMOM_thread_join MOM_thread_join = winmom_thread_join;
 fnMOM_thread_suspend MOM_thread_suspend = winmom_thread_suspend;
 fnMOM_thread_resume MOM_thread_resume = winmom_thread_resume;
 fnMOM_thread_identifier MOM_thread_identifier = winmom_thread_identifier;
+
+fnMOM_thread_static_tls_set MOM_thread_static_tls_set = winmom_thread_static_tls_set;
 
 /** \} */

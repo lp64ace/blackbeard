@@ -17,8 +17,8 @@ extern "C" {
  * \{ */
 
 typedef enum eBobManualMap {
-	kBobRebaseAlways = (1 << 0),
-	kBobDependency = (1 << 1),
+	BOB_REBASE_ALWAYS = (1 << 0),
+	BOB_DEPENDENCY = (1 << 1),
 } eBobManualMap;
 
 void *BOB_manual_map_module(struct ProcessHandle *process, struct ModuleHandle *handle, int flag);

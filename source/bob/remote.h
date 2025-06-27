@@ -9,6 +9,7 @@
 extern "C" {
 #endif
 
+struct ModuleHandle;
 struct ProcessHandle;
 
 /* -------------------------------------------------------------------- */
@@ -41,10 +42,10 @@ void BOB_remote_worker_close(struct RemoteWorker *worker);
  * \{ */
 
 typedef enum eBobArgumentDeref {
-	kBobNoDeref,
-	kBobDeref,
-	kBobDeref4,
-	kBobDeref8,
+	BOB_NODEREF,
+	BOB_DEREF,
+	BOB_DEREF4,
+	BOB_DEREF8,
 } eBobArgumentDeref;
 
 void *BOB_remote_write_ex(struct RemoteWorker *worker, const void *buffer, size_t size);
@@ -54,10 +55,10 @@ void *BOB_remote_push_ansi(struct RemoteWorker *worker, const char *buffer);
 void *BOB_remote_push_wide(struct RemoteWorker *worker, const wchar_t *buffer);
 
 typedef enum eBobCallConvention {
-	kBobStdcall,
-	kBobFastcall,
-	kBobThiscall,
-	kBobWin64,
+	BOB_STDCALL,
+	BOB_FASTCALL,
+	BOB_THISCALL,
+	BOB_WIN64,
 } eBobCallConvention;
 
 void BOB_remote_begin64(struct RemoteWorker *worker);
@@ -79,8 +80,10 @@ bool BOB_remote_build_manifest(struct RemoteWorker *worker, const void *manifest
 bool BOB_remote_bind_manifest(struct RemoteWorker *worker);
 bool BOB_remote_unbind_manifest(struct RemoteWorker *worker);
 
-bool BOB_remote_build_seh(struct RemoteWorker *worker, void *real, void *seh, size_t count);
-void *BOB_remote_load_dep(struct RemoteWorker *worker, ModuleHandle *handle);
+bool BOB_remote_build_cookie(struct RemoteWorker *worker, void *cookieptr);
+bool BOB_remote_build_seh(struct RemoteWorker *worker, struct ModuleHandle *handle, void *seh, size_t count);
+bool BOB_remote_build_tls(struct RemoteWorker *worker, void *real, void *tls);
+void *BOB_remote_load_dep(struct RemoteWorker *worker, struct ModuleHandle *handle);
 bool BOB_remote_call_entry(struct RemoteWorker *worker, void *real, void *entry);
 
 /** \} */
@@ -89,7 +92,7 @@ bool BOB_remote_call_entry(struct RemoteWorker *worker, void *real, void *entry)
 /** \name Queries
  * \{ */
 
-int BOB_remote_thread(struct RemoteWorker *worker);
+struct ThreadHandle *BOB_remote_thread(struct RemoteWorker *worker);
 
 /** \} */
 

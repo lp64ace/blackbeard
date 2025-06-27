@@ -27,12 +27,6 @@
 
 #include "list.h"
 
-#include <stdbool.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -41,6 +35,8 @@ extern "C" {
 #define MOM_MAX_DLLNAME_LEN 256
 #define MOM_MAX_EXPNAME_LEN 256
 #define MOM_MAX_LIBNAME_LEN 256
+
+struct ListBase;
 
 struct ProcessHandle;
 struct ModuleHandle;
@@ -52,9 +48,9 @@ struct EventHandle;
  * { */
 
 typedef enum eMomArchitecture {
-	kMomArchitectureNone,
-	kMomArchitectureAmd32,
-	kMomArchitectureAmd64,
+	MOM_ARCHITECTURE_NONE,
+	MOM_ARCHITECTURE_AMD32,
+	MOM_ARCHITECTURE_AMD64,
 } eMomArchitecture;
 
 size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture);
@@ -73,27 +69,31 @@ typedef struct ModuleRelocation ModuleRelocation;
 typedef struct ModuleTLS ModuleTLS;
 typedef struct ModuleException ModuleException;
 
-typedef ListBase (*fnMOM_module_open_by_file)(const char *filepath);
-typedef ListBase (*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
+typedef struct ListBase (*fnMOM_module_open_by_file)(const char *filepath);
+typedef struct ListBase (*fnMOM_module_open_by_name)(struct ProcessHandle *process, const char *name);
 typedef struct ModuleHandle *(*fnMOM_module_open_by_image)(const void *image, size_t length);
 typedef struct ModuleHandle *(*fnMOM_module_open_by_address)(struct ProcessHandle *process, const void *address, size_t length);
 typedef size_t (*fnMOM_module_size)(struct ModuleHandle *handle);
+typedef size_t (*fnMOM_module_header_size)(struct ModuleHandle *handle);
 typedef const char *(*fnMOM_module_name)(const struct ModuleHandle *handle);
 typedef void *(*fnMOM_module_set_address)(ModuleHandle *handle, void *address);
 typedef void *(*fnMOM_module_get_address)(ModuleHandle *handle);
 typedef void *(*fnMOM_module_get_base)(ModuleHandle *handle);
+
+typedef void *(*fnMOM_module_logical)(struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_physical)(struct ModuleHandle *handle);
 
 typedef void (*fnMOM_module_close)(struct ModuleHandle *handle);
 typedef void (*fnMOM_module_close_collection)(struct ListBase *collection);
 
 typedef eMomArchitecture (*fnMOM_module_architecture)(struct ModuleHandle *handle);
 
-typedef ListBase (*fnMOM_module_sections)(struct ModuleHandle *handle);
-typedef ListBase (*fnMOM_module_exports)(struct ModuleHandle *handle);
-typedef ListBase (*fnMOM_module_imports)(struct ModuleHandle *handle);
-typedef ListBase (*fnMOM_module_imports_delayed)(struct ModuleHandle *handle);
-typedef ListBase (*fnMOM_module_tls)(struct ModuleHandle *handle);
-typedef ListBase (*fnMOM_module_relocations)(struct ModuleHandle *handle);
+typedef struct ListBase (*fnMOM_module_sections)(struct ModuleHandle *handle);
+typedef struct ListBase (*fnMOM_module_exports)(struct ModuleHandle *handle);
+typedef struct ListBase (*fnMOM_module_imports)(struct ModuleHandle *handle);
+typedef struct ListBase (*fnMOM_module_imports_delayed)(struct ModuleHandle *handle);
+typedef struct ListBase (*fnMOM_module_tls)(struct ModuleHandle *handle);
+typedef struct ListBase (*fnMOM_module_relocations)(struct ModuleHandle *handle);
 
 typedef const char *(*fnMOM_module_section_name)(struct ModuleHandle *handle, struct ModuleSection *section);
 typedef void *(*fnMOM_module_section_logical)(struct ModuleHandle *handle, struct ModuleSection *section);
@@ -126,13 +126,13 @@ typedef void *(*fnMOM_module_import_physical_thunk)(struct ModuleHandle *handle,
 typedef void *(*fnMOM_module_import_physical_funk)(struct ModuleHandle *handle, struct ModuleImport *imported);
 
 typedef enum eMomRelocationType {
-	kMomRelocationNone,
-	kMomRelocationHigh,    // *(uint16_t **)address += HIWORD(delta);
-	kMomRelocationLow,     // *(uint16_t **)address += LOWORD(delta);
-	kMomRelocationHighLow, // *(uintptr_t **)address += delta;
-	kMomRelocationDir64,   // *(uint64_t **)address += delta;
-	kMomRelocationAbsolute,
-	kMomRelocationHighAdj,
+	MOM_RELOCATION_NONE,
+	MOM_RELOCATION_HIGH,	 // *(uint16_t **)address += HIWORD(delta);
+	MOM_RELOCATION_LOW,		 // *(uint16_t **)address += LOWORD(delta);
+	MOM_RELOCATION_HIGHLOW,	 // *(uintptr_t **)address += delta;
+	MOM_RELOCATION_DIR64,	 // *(uint64_t **)address += delta;
+	MOM_RELOCATION_ABSOLUTE,
+	MOM_RELOCATION_HIGHADJ,
 } eMomRelocationType;
 
 typedef eMomRelocationType (*fnMOM_module_relocation_type)(struct ModuleHandle *handle, struct ModuleRelocation *relocation);
@@ -145,6 +145,17 @@ typedef void *(*fnMOM_module_seh_logical)(struct ModuleHandle *handle);
 // Even if this doesn't return NULL the return address may not be owned by this process!
 typedef void *(*fnMOM_module_seh_physical)(struct ModuleHandle *handle);
 
+typedef size_t (*fnMOM_module_tls_static_size)(struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_tls_static_logical)(struct ModuleHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_tls_static_physical)(struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_tls_table_logical)(struct ModuleHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_module_tls_table_physical)(struct ModuleHandle *handle);
+typedef int (*fnMOM_module_tls_index)(struct ModuleHandle *handle);
+typedef void *(*fnMOM_module_tls_logical)(struct ModuleHandle *handle, struct ModuleTLS *tls);
+typedef void *(*fnMOM_module_tls_physical)(struct ModuleHandle *handle, struct ModuleTLS *tls);
+
 typedef size_t (*fnMOM_module_manifest_size)(struct ModuleHandle *handle);
 typedef void *(*fnMOM_module_manifest_logical)(struct ModuleHandle *handle);
 // Even if this doesn't return NULL the return address may not be owned by this process!
@@ -154,6 +165,7 @@ typedef void *(*fnMOM_module_entry_logical)(struct ModuleHandle *handle);
 // Even if this doesn't return NULL the return address may not be owned by this process!
 typedef void *(*fnMOM_module_entry_physical)(struct ModuleHandle *handle);
 
+typedef void *(*fnMOM_module_cookie_virtual)(struct ModuleHandle *handle);
 typedef void *(*fnMOM_module_cookie_logical)(struct ModuleHandle *handle);
 // Even if this doesn't return NULL the return address may not be owned by this process!
 typedef void *(*fnMOM_module_cookie_physical)(struct ModuleHandle *handle);
@@ -165,10 +177,14 @@ extern fnMOM_module_open_by_name MOM_module_open_by_name;
 extern fnMOM_module_open_by_image MOM_module_open_by_image;
 extern fnMOM_module_open_by_address MOM_module_open_by_address;
 extern fnMOM_module_size MOM_module_size;
+extern fnMOM_module_header_size MOM_module_header_size;
 extern fnMOM_module_name MOM_module_name;
 extern fnMOM_module_set_address MOM_module_set_address;
 extern fnMOM_module_get_address MOM_module_get_address;
 extern fnMOM_module_get_base MOM_module_get_base;
+
+extern fnMOM_module_logical MOM_module_logical;
+extern fnMOM_module_physical MOM_module_physical;
 
 extern fnMOM_module_close MOM_module_close;
 extern fnMOM_module_close_collection MOM_module_close_collection;
@@ -225,6 +241,18 @@ extern fnMOM_module_seh_logical MOM_module_seh_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
 extern fnMOM_module_seh_physical MOM_module_seh_physical;
 
+extern fnMOM_module_tls_static_size MOM_module_tls_static_size;
+extern fnMOM_module_tls_static_logical MOM_module_tls_static_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_tls_static_physical MOM_module_tls_static_physical;
+extern fnMOM_module_tls_table_logical MOM_module_tls_table_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_tls_table_physical MOM_module_tls_table_physical;
+extern fnMOM_module_tls_index MOM_module_tls_index;
+extern fnMOM_module_tls_logical MOM_module_tls_logical;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_module_tls_physical MOM_module_tls_physical;
+
 extern fnMOM_module_manifest_size MOM_module_manifest_size;
 extern fnMOM_module_manifest_logical MOM_module_manifest_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
@@ -234,6 +262,7 @@ extern fnMOM_module_entry_logical MOM_module_entry_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
 extern fnMOM_module_entry_physical MOM_module_entry_physical;
 
+extern fnMOM_module_cookie_virtual MOM_module_cookie_virtual;
 extern fnMOM_module_cookie_logical MOM_module_cookie_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
 extern fnMOM_module_cookie_physical MOM_module_cookie_physical;
@@ -247,10 +276,10 @@ extern fnMOM_module_cookie_physical MOM_module_cookie_physical;
 typedef struct ProcessHandle ProcessHandle;
 
 typedef enum eMomMemoryProtect {
-	kMomProtectNone = 0,
-	kMomProtectRead = (1 << 0),
-	kMomProtectWrite = (1 << 1),
-	kMomProtectExec = (1 << 2),
+	MOM_PROTECT_NONE = 0,
+	MOM_PROTECT_R = (1 << 0),
+	MOM_PROTECT_W = (1 << 1),
+	MOM_PROTECT_E = (1 << 2),
 } eMomMemoryProtect;
 
 typedef ListBase (*fnMOM_process_open_by_name)(const char *name);
@@ -307,6 +336,8 @@ typedef bool (*fnMOM_thread_suspend)(struct ThreadHandle *handle);
 typedef bool (*fnMOM_thread_resume)(struct ThreadHandle *handle);
 typedef int (*fnMOM_thread_identifier)(struct ThreadHandle *handle);
 
+typedef bool (*fnMOM_thread_static_tls_set)(struct ProcessHandle *process, struct ThreadHandle *thread, int index, const void *data, size_t size);
+
 extern fnMOM_thread_open MOM_thread_open;
 extern fnMOM_thread_spawn MOM_thread_spawn;
 extern fnMOM_thread_close MOM_thread_close;
@@ -316,6 +347,8 @@ extern fnMOM_thread_join MOM_thread_join;
 extern fnMOM_thread_suspend MOM_thread_suspend;
 extern fnMOM_thread_resume MOM_thread_resume;
 extern fnMOM_thread_identifier MOM_thread_identifier;
+
+extern fnMOM_thread_static_tls_set MOM_thread_static_tls_set;
 
 /** \} */
 

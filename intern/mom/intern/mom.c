@@ -33,8 +33,8 @@
 
 size_t MOM_module_architecture_pointer_size(eMomArchitecture architecture) {
 	switch (architecture) {
-		case kMomArchitectureAmd32: return sizeof(int32_t);
-		case kMomArchitectureAmd64: return sizeof(int64_t);
+		case MOM_ARCHITECTURE_AMD32: return sizeof(int32_t);
+		case MOM_ARCHITECTURE_AMD64: return sizeof(int64_t);
 	}
 	return 0;
 }
@@ -71,6 +71,14 @@ void *mom_module_get_address(ModuleHandle *handle) {
 
 void *mom_module_get_base(ModuleHandle *handle) {
 	return (void *)handle->base;
+}
+
+void *mom_module_logical(ModuleHandle *handle) {
+	return (void *)handle->image;
+}
+
+void *mom_module_physical(ModuleHandle *handle) {
+	return (void *)handle->real;
 }
 
 void mom_module_close_collection(ListBase *collection) {
@@ -188,6 +196,9 @@ fnMOM_module_name MOM_module_name = mom_module_name;
 fnMOM_module_set_address MOM_module_set_address = mom_module_set_address;
 fnMOM_module_get_address MOM_module_get_address = mom_module_get_address;
 fnMOM_module_get_base MOM_module_get_base = mom_module_get_base;
+
+fnMOM_module_logical MOM_module_logical = mom_module_logical;
+fnMOM_module_physical MOM_module_physical = mom_module_physical;
 
 fnMOM_module_close_collection MOM_module_close_collection = mom_module_close_collection;
 fnMOM_module_sections MOM_module_sections = mom_module_sections;

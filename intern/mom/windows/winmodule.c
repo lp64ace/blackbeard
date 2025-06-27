@@ -1,5 +1,7 @@
 #include "MEM_guardedalloc.h"
 
+#include "defines.h"
+
 #include "intern/mom_internal.h"
 #include "mom.h"
 #include "winmom.h" // Keep last!
@@ -18,8 +20,12 @@ static inline void *winmom_module_resolve_virtual_address_to_disk(ModuleHandle *
 		return NULL;
 	}
 
+	if (handle->base < virtual_address) {
+		virtual_address = virtual_address - handle->base;
+	}
+
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			for (IMAGE_SECTION_HEADER *header = IMAGE_FIRST_SECTION(nt); header != IMAGE_FIRST_SECTION(nt) + nt->FileHeader.NumberOfSections; header++) {
@@ -32,7 +38,7 @@ static inline void *winmom_module_resolve_virtual_address_to_disk(ModuleHandle *
 				return POINTER_OFFSET(handle->disk, virtual_address);
 			}
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			for (IMAGE_SECTION_HEADER *header = IMAGE_FIRST_SECTION(nt); header != IMAGE_FIRST_SECTION(nt) + nt->FileHeader.NumberOfSections; header++) {
@@ -56,13 +62,17 @@ static inline void *winmom_module_resolve_virtual_address_to_memory(ModuleHandle
 		return NULL;
 	}
 
+	if (handle->base < virtual_address) {
+		virtual_address = virtual_address - handle->base;
+	}
+
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			return POINTER_OFFSET((void *)handle->real, virtual_address);
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			return POINTER_OFFSET((void *)handle->real, virtual_address);
@@ -120,10 +130,10 @@ static bool winmom_module_header_is_valid(const ModuleHandle *handle) {
  */
 static IMAGE_SECTION_HEADER *winmom_module_native_section_begin(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			return IMAGE_FIRST_SECTION(NT32(handle));
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			return IMAGE_FIRST_SECTION(NT64(handle));
 		} break;
 	}
@@ -132,10 +142,10 @@ static IMAGE_SECTION_HEADER *winmom_module_native_section_begin(ModuleHandle *ha
 
 static IMAGE_SECTION_HEADER *winmom_module_native_section_end(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			return IMAGE_FIRST_SECTION(NT32(handle)) + NT32(handle)->FileHeader.NumberOfSections;
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			return IMAGE_FIRST_SECTION(NT64(handle)) + NT64(handle)->FileHeader.NumberOfSections;
 		} break;
 	}
@@ -144,10 +154,10 @@ static IMAGE_SECTION_HEADER *winmom_module_native_section_end(ModuleHandle *hand
 
 static size_t winmom_module_native_directory_size(ModuleHandle *handle, int directory) {
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			return NT32(handle)->OptionalHeader.DataDirectory[directory].Size;
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			return NT64(handle)->OptionalHeader.DataDirectory[directory].Size;
 		} break;
 	}
@@ -156,7 +166,7 @@ static size_t winmom_module_native_directory_size(ModuleHandle *handle, int dire
 
 static DWORD winmom_module_native_directory_address(ModuleHandle *handle, int directory) {
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			if (!nt->OptionalHeader.DataDirectory[directory].Size) {
@@ -165,7 +175,7 @@ static DWORD winmom_module_native_directory_address(ModuleHandle *handle, int di
 
 			return nt->OptionalHeader.DataDirectory[directory].VirtualAddress;
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			if (!nt->OptionalHeader.DataDirectory[directory].Size) {
@@ -212,7 +222,7 @@ static bool winmom_module_resolve_exports(ModuleHandle *handle) {
 		if (address <= functions[index] && functions[index] <= address + winmom_module_native_directory_size(handle, IMAGE_DIRECTORY_ENTRY_EXPORT)) {
 			char forward[MOM_MAX_LIBNAME_LEN + MOM_MAX_EXPNAME_LEN];
 			
-			strncpy(forward, winmom_module_resolve_virtual_address_to_image(handle, functions[index]), ARRAYSIZE(forward));
+			strcpy(forward, winmom_module_resolve_virtual_address_to_image(handle, functions[index]));
 			forward[ARRAYSIZE(forward) - 1] = '\0';
 
 			if (sscanf(forward, "%[^.].%s", new->libname, new->fwdname) > 0) {
@@ -238,7 +248,7 @@ static bool winmom_module_resolve_exports(ModuleHandle *handle) {
 		ModuleExport *exp = array[namedordinals[nindex]];
 
 		if (exp) {
-			memcpy(exp->expname, winmom_module_resolve_virtual_address_to_image(handle, names[nindex]), ARRAYSIZE(exp->expname));
+			strcpy(exp->expname, winmom_module_resolve_virtual_address_to_image(handle, names[nindex]));
 		}
 	}
 
@@ -251,7 +261,7 @@ static bool winmom_module_resolve_import(ModuleHandle *handle, ModuleImport *imp
 	uintptr_t address = 0;
 
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			const IMAGE_THUNK_DATA32 *thunk = vthunk;
 			const IMAGE_THUNK_DATA32 *funk = vfunk;
 
@@ -261,7 +271,7 @@ static bool winmom_module_resolve_import(ModuleHandle *handle, ModuleImport *imp
 				address = thunk->u1.AddressOfData;
 			}
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			const IMAGE_THUNK_DATA64 *thunk = vthunk;
 			const IMAGE_THUNK_DATA64 *funk = vfunk;
 
@@ -276,11 +286,11 @@ static bool winmom_module_resolve_import(ModuleHandle *handle, ModuleImport *imp
 	if (address) {
 		IMAGE_IMPORT_BY_NAME *image = winmom_module_resolve_virtual_address_to_image(handle, address);
 		if (image) {
-			memcpy(imported->expname, image->Name, MOM_MAX_EXPNAME_LEN);
+			strcpy(imported->expname, image->Name);
 		}
 	}
 
-	memcpy(imported->libname, libname, MOM_MAX_LIBNAME_LEN);
+	strcpy(imported->libname, libname);
 
 	return true;
 }
@@ -295,7 +305,7 @@ static bool winmom_module_resolve_imports(ModuleHandle *handle) {
 	for (IMAGE_IMPORT_DESCRIPTOR *desc = directory; desc && desc->Name != 0; desc++) {
 		char libname[MOM_MAX_LIBNAME_LEN];
 
-		memcpy(libname, winmom_module_resolve_virtual_address_to_image(handle, desc->Name), ARRAYSIZE(libname));
+		strcpy(libname, winmom_module_resolve_virtual_address_to_image(handle, desc->Name));
 
 		void *thunk = NULL;
 		void *funk = NULL;
@@ -321,8 +331,8 @@ static bool winmom_module_resolve_imports(ModuleHandle *handle) {
 
 		/**
 		 * If this was CXX and we had constexpr this would be
-		 * static_assert(sizeof(IMAGE_THUNK_DATA32) == MOM_module_architecture_pointer_size(kMomArchitectureAmd32), ...);
-		 * static_assert(sizeof(IMAGE_THUNK_DATA64) == MOM_module_architecture_pointer_size(kMomArchitectureAmd64), ...);
+		 * static_assert(sizeof(IMAGE_THUNK_DATA32) == MOM_module_architecture_pointer_size(MOM_ARCHITECTURE_AMD32), ...);
+		 * static_assert(sizeof(IMAGE_THUNK_DATA64) == MOM_module_architecture_pointer_size(MOM_ARCHITECTURE_AMD64), ...);
 		 */
 		// static_assert(sizeof(IMAGE_THUNK_DATA32) == sizeof(int32_t), "Bad thunk iteration");
 		// static_assert(sizeof(IMAGE_THUNK_DATA64) == sizeof(int64_t), "Bad thunk iteration");
@@ -366,7 +376,7 @@ static bool winmom_module_resolve_imports_delayed(ModuleHandle *handle) {
 	for (IMAGE_DELAYLOAD_DESCRIPTOR *desc = directory; desc && desc->DllNameRVA != 0; desc++) {
 		char libname[MOM_MAX_LIBNAME_LEN];
 
-		memcpy(libname, winmom_module_resolve_virtual_address_to_image(handle, desc->DllNameRVA), ARRAYSIZE(libname));
+		strcpy(libname, winmom_module_resolve_virtual_address_to_image(handle, desc->DllNameRVA));
 
 		void *thunk = NULL;
 		void *funk = NULL;
@@ -387,8 +397,8 @@ static bool winmom_module_resolve_imports_delayed(ModuleHandle *handle) {
 
 		/**
 		 * If this was CXX and we had constexpr this would be
-		 * static_assert(sizeof(IMAGE_THUNK_DATA32) == MOM_module_architecture_pointer_size(kMomArchitectureAmd32), ...);
-		 * static_assert(sizeof(IMAGE_THUNK_DATA64) == MOM_module_architecture_pointer_size(kMomArchitectureAmd64), ...);
+		 * static_assert(sizeof(IMAGE_THUNK_DATA32) == MOM_module_architecture_pointer_size(MOM_ARCHITECTURE_AMD32), ...);
+		 * static_assert(sizeof(IMAGE_THUNK_DATA64) == MOM_module_architecture_pointer_size(MOM_ARCHITECTURE_AMD64), ...);
 		 */
 		// static_assert(sizeof(IMAGE_THUNK_DATA32) == sizeof(int32_t), "Bad thunk iteration");
 		// static_assert(sizeof(IMAGE_THUNK_DATA64) == sizeof(int64_t), "Bad thunk iteration");
@@ -448,22 +458,22 @@ bool winmom_module_resolve_relocations(ModuleHandle *handle) {
 
 			switch (IMR_RELTYPE(*data)) {
 				case IMAGE_REL_BASED_HIGH: {
-					new->type = kMomRelocationHigh;
+					new->type = MOM_RELOCATION_HIGH;
 				} break;
 				case IMAGE_REL_BASED_LOW: {
-					new->type = kMomRelocationLow;
+					new->type = MOM_RELOCATION_LOW;
 				} break;
 				case IMAGE_REL_BASED_HIGHLOW: {
-					new->type = kMomRelocationHighLow;
+					new->type = MOM_RELOCATION_HIGHLOW;
 				} break;
 				case IMAGE_REL_BASED_DIR64: {
-					new->type = kMomRelocationDir64;
+					new->type = MOM_RELOCATION_DIR64;
 				} break;
 				case IMAGE_REL_BASED_ABSOLUTE: {
-					new->type = kMomRelocationAbsolute;
+					new->type = MOM_RELOCATION_ABSOLUTE;
 				} break;
 				case IMAGE_REL_BASED_HIGHADJ: {
-					new->type = kMomRelocationHighAdj;
+					new->type = MOM_RELOCATION_HIGHADJ;
 				} break;
 			}
 
@@ -482,7 +492,50 @@ bool winmom_module_resolve_relocations(ModuleHandle *handle) {
 }
 
 static bool winmom_module_resolve_exceptions(ModuleHandle *handle) {
-	handle->exceptions = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+	handle->va_exceptions = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_EXCEPTION);
+
+	return true;
+}
+
+static bool winmom_module_resolve_tls(ModuleHandle *handle) {
+	void *directory = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+	if (!directory) {
+		return true;
+	}
+
+	switch (MOM_module_architecture(handle)) {
+		case MOM_ARCHITECTURE_AMD32: {
+			IMAGE_TLS_DIRECTORY32 *tls = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+			handle->va_static_tls = tls->StartAddressOfRawData - handle->base;
+			handle->va_index_tls = tls->AddressOfIndex - handle->base;
+
+			uint32_t *ptr = winmom_module_resolve_virtual_address_to_image(handle, tls->AddressOfCallBacks - handle->base);
+			while (*ptr) {
+				ModuleTLS *new = MEM_callocN(sizeof(ModuleTLS), "TLS");
+				new->va = (uintptr_t)(*ptr);
+				LIB_addtail(&handle->tls, new);
+
+				ptr++;
+			}
+		} break;
+		case MOM_ARCHITECTURE_AMD64: {
+			IMAGE_TLS_DIRECTORY64 *tls = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+			handle->va_static_tls = tls->StartAddressOfRawData - handle->base;
+			handle->va_index_tls = tls->AddressOfIndex - handle->base;
+
+			uint64_t *ptr = winmom_module_resolve_virtual_address_to_image(handle, tls->AddressOfCallBacks - handle->base);
+			while (*ptr) {
+				ModuleTLS *new = MEM_callocN(sizeof(ModuleTLS), "TLS");
+				new->va = (uintptr_t)(*ptr);
+				LIB_addtail(&handle->tls, new);
+
+				ptr++;
+			}
+		} break;
+	}
 
 	return true;
 }
@@ -534,7 +587,7 @@ static bool winmom_module_resolve_cookie(ModuleHandle *handle) {
 		return true;
 	}
 	
-	handle->cookie = directory->SecurityCookie;
+	handle->cookie = directory->SecurityCookie - handle->base;
 	
 	return true;
 }
@@ -556,6 +609,9 @@ static bool winmom_module_resolve(ModuleHandle *handle) {
 		return false;
 	}
 	if (!winmom_module_resolve_exceptions(handle)) {
+		return false;
+	}
+	if (!winmom_module_resolve_tls(handle)) {
 		return false;
 	}
 	if (!winmom_module_resolve_manifest(handle)) {
@@ -629,7 +685,7 @@ static ModuleHandle *winmom_module_open_by_file_from_disk(const char *fullpath) 
 		}
 
 		if ((handle = MOM_module_open_by_image(image, total))) {
-			strncpy(handle->dllname, fullpath, strnlen(fullpath, MOM_MAX_DLLNAME_LEN));
+			strcpy(handle->dllname, fullpath);
 		}
 
 		MEM_SAFE_FREE(image);
@@ -645,7 +701,7 @@ static ModuleHandle *winmom_module_open_by_name_from_memory(ProcessHandle *handl
 		if (winmom_module_loaded_match_name(MOM_module_name(module), resolved)) {
 			if (module->real) {
 				ModuleHandle *loaded = MOM_module_open_by_address(handle, (void *)module->real, MOM_module_size(module));
-				memcpy(loaded->dllname, MOM_module_name(module), MOM_MAX_DLLNAME_LEN);
+				strcpy(loaded->dllname, MOM_module_name(module));
 				return loaded;
 			}
 		}
@@ -709,10 +765,10 @@ ModuleHandle *winmom_module_open_by_image(const void *image, size_t length) {
 	memcpy(handle->image, image, length);
 
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			handle->base = NT32(handle)->OptionalHeader.ImageBase;
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			handle->base = NT64(handle)->OptionalHeader.ImageBase;
 		} break;
 	}
@@ -738,10 +794,10 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 	}
 
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			handle->base = NT32(handle)->OptionalHeader.ImageBase;
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			handle->base = NT64(handle)->OptionalHeader.ImageBase;
 		} break;
 	}
@@ -763,6 +819,21 @@ size_t winmom_module_size(ModuleHandle *handle) {
 	}
 	// Why not hi - lo? Because this is the memory in the sections! the virtual address starts from the headers (zero)!
 	return hi;
+}
+
+size_t winmom_module_header_size(ModuleHandle *handle) {
+	IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)handle->image;
+	if (((IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
+		if (((IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
+			return NT32(handle)->OptionalHeader.SizeOfHeaders;
+		}
+	}
+	if (((IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
+		if (((IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
+			return NT64(handle)->OptionalHeader.SizeOfHeaders;
+		}
+	}
+	return 0;
 }
 
 void winmom_module_close(ModuleHandle *handle) {
@@ -792,15 +863,15 @@ eMomArchitecture winmom_module_architecture(ModuleHandle *handle) {
 	IMAGE_DOS_HEADER *dos = (IMAGE_DOS_HEADER *)handle->image;
 	if (((IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
 		if (((IMAGE_NT_HEADERS32 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR32_MAGIC) {
-			return kMomArchitectureAmd32;
+			return MOM_ARCHITECTURE_AMD32;
 		}
 	}
 	if (((IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->Signature == IMAGE_NT_SIGNATURE) {
 		if (((IMAGE_NT_HEADERS64 *)POINTER_OFFSET(handle->image, dos->e_lfanew))->OptionalHeader.Magic == IMAGE_NT_OPTIONAL_HDR64_MAGIC) {
-			return kMomArchitectureAmd64;
+			return MOM_ARCHITECTURE_AMD64;
 		}
 	}
-	return kMomArchitectureNone;
+	return MOM_ARCHITECTURE_NONE;
 }
 
 const char *winmom_module_section_name(ModuleHandle *handle, ModuleSection *section) {
@@ -827,13 +898,13 @@ int winmom_module_section_protection(ModuleHandle *handle, ModuleSection *sectio
 	if (header->Characteristics & (IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE | IMAGE_SCN_MEM_EXECUTE)) {
 		int protection = 0;
 		if ((header->Characteristics & IMAGE_SCN_MEM_READ) != 0) {
-			protection |= kMomProtectRead;
+			protection |= MOM_PROTECT_R;
 		}
 		if ((header->Characteristics & IMAGE_SCN_MEM_WRITE) != 0) {
-			protection |= kMomProtectWrite;
+			protection |= MOM_PROTECT_W;
 		}
 		if ((header->Characteristics & IMAGE_SCN_MEM_EXECUTE) != 0) {
-			protection |= kMomProtectExec;
+			protection |= MOM_PROTECT_E;
 		}
 		return protection;
 	}
@@ -885,11 +956,75 @@ size_t winmom_module_seh_count(ModuleHandle *handle) {
 }
 
 void *winmom_module_seh_logical(ModuleHandle *handle) {
-	return winmom_module_resolve_virtual_address_to_image(handle, handle->exceptions);
+	return winmom_module_resolve_virtual_address_to_image(handle, handle->va_exceptions);
 }
 
 void *winmom_module_seh_physical(ModuleHandle *handle) {
-	return winmom_module_resolve_virtual_address_to_memory(handle, handle->exceptions);
+	return winmom_module_resolve_virtual_address_to_memory(handle, handle->va_exceptions);
+}
+
+size_t winmom_module_tls_static_size(ModuleHandle *handle) {
+	switch (MOM_module_architecture(handle)) {
+		case MOM_ARCHITECTURE_AMD32: {
+			IMAGE_TLS_DIRECTORY32 *tls = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+			if (tls) {
+				return tls->EndAddressOfRawData - tls->StartAddressOfRawData;
+			}
+		} break;
+		case MOM_ARCHITECTURE_AMD64: {
+			IMAGE_TLS_DIRECTORY64 *tls = winmom_module_native_directory(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+			if (tls) {
+				return tls->EndAddressOfRawData - tls->StartAddressOfRawData;
+			}
+		} break;
+	}
+	return 0;
+}
+
+void *winmom_module_tls_static_logical(ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_image(handle, handle->va_static_tls);
+}
+
+void *winmom_module_tls_static_physical(ModuleHandle *handle) {
+	return winmom_module_resolve_virtual_address_to_memory(handle, handle->va_static_tls);
+}
+
+void *winmom_module_tls_table_logical(ModuleHandle *handle) {
+	uintptr_t va = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+	return winmom_module_resolve_virtual_address_to_image(handle, va);
+}
+
+void *winmom_module_tls_table_physical(ModuleHandle *handle) {
+	uintptr_t va = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_TLS);
+
+	return winmom_module_resolve_virtual_address_to_memory(handle, va);
+}
+
+int winmom_module_tls_index(ModuleHandle *handle) {
+	switch (MOM_module_architecture(handle)) {
+		case MOM_ARCHITECTURE_AMD32: {
+			int32_t index = *(int32_t *)winmom_module_resolve_virtual_address_to_image(handle, handle->va_index_tls);
+
+			return index;
+		} break;
+		case MOM_ARCHITECTURE_AMD64: {
+			int64_t index = *(int64_t *)winmom_module_resolve_virtual_address_to_image(handle, handle->va_index_tls);
+
+			return index;
+		} break;
+	}
+	return 0;
+}
+
+void winmom_module_tls_logical(ModuleHandle *handle, ModuleTLS *tls) {
+	return winmom_module_resolve_virtual_address_to_image(handle, tls->va);
+}
+
+void winmom_module_tls_physical(ModuleHandle *handle, ModuleTLS *tls) {
+	return winmom_module_resolve_virtual_address_to_memory(handle, tls->va);
 }
 
 size_t winmom_module_manifest_size(ModuleHandle *handle) {
@@ -906,12 +1041,12 @@ void *winmom_module_manifest_physical(ModuleHandle *handle) {
 
 void *winmom_module_entry_logical(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			return winmom_module_resolve_virtual_address_to_image(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			return winmom_module_resolve_virtual_address_to_image(handle, nt->OptionalHeader.AddressOfEntryPoint);
@@ -922,18 +1057,22 @@ void *winmom_module_entry_logical(ModuleHandle *handle) {
 
 void *winmom_module_entry_physical(ModuleHandle *handle) {
 	switch (MOM_module_architecture(handle)) {
-		case kMomArchitectureAmd32: {
+		case MOM_ARCHITECTURE_AMD32: {
 			IMAGE_NT_HEADERS32 *nt = NT32(handle);
 
 			return winmom_module_resolve_virtual_address_to_memory(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;
-		case kMomArchitectureAmd64: {
+		case MOM_ARCHITECTURE_AMD64: {
 			IMAGE_NT_HEADERS64 *nt = NT64(handle);
 
 			return winmom_module_resolve_virtual_address_to_memory(handle, nt->OptionalHeader.AddressOfEntryPoint);
 		} break;
 	}
 	return 0;
+}
+
+void *winmom_module_cookie_virtual(ModuleHandle *handle) {
+	return (void *)handle->cookie;
 }
 
 void *winmom_module_cookie_logical(ModuleHandle *handle) {
@@ -955,6 +1094,7 @@ fnMOM_module_open_by_name MOM_module_open_by_name = winmom_module_open_by_name;
 fnMOM_module_open_by_image MOM_module_open_by_image = winmom_module_open_by_image;
 fnMOM_module_open_by_address MOM_module_open_by_address = winmom_module_open_by_address;
 fnMOM_module_size MOM_module_size = winmom_module_size;
+fnMOM_module_header_size MOM_module_header_size = winmom_module_header_size;
 
 fnMOM_module_close MOM_module_close = winmom_module_close;
 
@@ -984,6 +1124,15 @@ fnMOM_module_seh_count MOM_module_seh_count = winmom_module_seh_count;
 fnMOM_module_seh_logical MOM_module_seh_logical = winmom_module_seh_logical;
 fnMOM_module_seh_physical MOM_module_seh_physical = winmom_module_seh_physical;
 
+fnMOM_module_tls_static_size MOM_module_tls_static_size = winmom_module_tls_static_size;
+fnMOM_module_tls_static_logical MOM_module_tls_static_logical = winmom_module_tls_static_logical;
+fnMOM_module_tls_static_physical MOM_module_tls_static_physical = winmom_module_tls_static_physical;
+fnMOM_module_tls_table_logical MOM_module_tls_table_logical = winmom_module_tls_table_logical;
+fnMOM_module_tls_table_physical MOM_module_tls_table_physical = winmom_module_tls_table_physical;
+fnMOM_module_tls_index MOM_module_tls_index = winmom_module_tls_index;
+fnMOM_module_tls_logical MOM_module_tls_logical = winmom_module_tls_logical;
+fnMOM_module_tls_physical MOM_module_tls_physical = winmom_module_tls_physical;
+
 fnMOM_module_manifest_size MOM_module_manifest_size = winmom_module_manifest_size;
 fnMOM_module_manifest_logical MOM_module_manifest_logical = winmom_module_manifest_logical;
 fnMOM_module_manifest_physical MOM_module_manifest_physical = winmom_module_manifest_physical;
@@ -991,6 +1140,7 @@ fnMOM_module_manifest_physical MOM_module_manifest_physical = winmom_module_mani
 fnMOM_module_entry_logical MOM_module_entry_logical = winmom_module_entry_logical;
 fnMOM_module_entry_physical MOM_module_entry_physical = winmom_module_entry_physical;
 
+fnMOM_module_cookie_virtual MOM_module_cookie_virtual = winmom_module_cookie_virtual;
 fnMOM_module_cookie_logical MOM_module_cookie_logical = winmom_module_cookie_logical;
 fnMOM_module_cookie_physical MOM_module_cookie_physical = winmom_module_cookie_physical;
 

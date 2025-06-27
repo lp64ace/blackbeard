@@ -1,8 +1,8 @@
 #define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 
-#include <stdbool.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 static pthread_t mThreadId;
@@ -10,18 +10,12 @@ static pthread_t mThreadId;
 #include <iostream>
 #include <vector>
 
-static int *get() {
-	static thread_local int num = 3;
-	return &num;
-}
-
 void *dispatch(void *userdata) {
-	int count = 16;
-	while (count--) {
-		std::cout << "[Thread] Hello, this is testdll2.c " << *get() << std::endl;
-		(*get())++;
+	std::vector<int> vector;
+	while (vector.size() < 16) {
+		vector.push_back(vector.size());
+		std::cout << "[Thread] Hello, this is testdll3.cc " << vector.size() << std::endl;
 	}
-
 	return NULL;
 }
 
@@ -35,11 +29,11 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 				(void)freopen("CONOUT$", "w", stderr);
 				(void)freopen("CONOUT$", "w", stdout);
 			}
-
-			int count = 16;
-			while (count--) {
-				std::cout << "[Main] Hello, this is testdll2.cc " << *get() << std::endl;
-				(*get())++;
+			
+			std::vector<int> vector;
+			while (vector.size() < 16) {
+				vector.push_back(vector.size());
+				std::cout << "[Main] Hello, this is testdll3.cc " << vector.size() << std::endl;
 			}
 
 			if (pthread_create(&mThreadId, NULL, dispatch, (void *)NULL) != 0) {
