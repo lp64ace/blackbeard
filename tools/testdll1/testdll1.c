@@ -5,7 +5,7 @@
 #include <pthread.h>
 #include <stdio.h>
 
-int count = 16;
+int count = 0xdead;
 
 BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 	switch (dwReason) {
@@ -18,9 +18,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 				(void)freopen("CONOUT$", "w", stdout);
 			}
 			
-			while (count--) {
-				fprintf(stdout, "Hello, this is testdll1.c\n");
-			}
+			fprintf(stdout, "Hello, this is testdll1.c 0x%x\n", count);
 		} break;
 		case DLL_PROCESS_DETACH: {
 			// Nothing to do!

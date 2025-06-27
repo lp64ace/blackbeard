@@ -385,12 +385,12 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		// 	}
 		// }
 
-		ListBase tlsentries = MOM_module_tls(handle);
-		LISTBASE_FOREACH(ModuleTLS *, tlsentry, &tlsentries) {
-			if (!BOB_remote_call_entry(worker, real, MOM_module_tls_physical(handle, tlsentry))) {
-				install &= false;  // When this happens sometimes the remote process crashes!
-			}
-		}
+		// ListBase tlsentries = MOM_module_tls(handle);
+		// LISTBASE_FOREACH(ModuleTLS *, tlsentry, &tlsentries) {
+		// 	if (!BOB_remote_call_entry(worker, real, MOM_module_tls_physical(handle, tlsentry))) {
+		// 		install &= false;  // When this happens sometimes the remote process crashes!
+		// 	}
+		// }
 
 		if (!BOB_remote_build_seh(worker, handle, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
 			install &= false;  // When this happens sometimes the remote process crashes!

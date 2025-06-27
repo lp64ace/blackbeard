@@ -11,15 +11,14 @@ static pthread_t mThreadId;
 #include <vector>
 
 static int *get() {
-	static thread_local int num = 3;
+	static thread_local int num = 4;
 	return &num;
 }
 
 void *dispatch(void *userdata) {
-	int count = 16;
-	while (count--) {
-		std::cout << "[Thread] Hello, this is testdll2.c " << *get() << std::endl;
-		(*get())++;
+	while (*get()) {
+		std::cout << "[Thread] Hello, this is testdll2.cc " << *get() << std::endl;
+		(*get())--;
 	}
 
 	return NULL;
@@ -36,10 +35,9 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 				(void)freopen("CONOUT$", "w", stdout);
 			}
 
-			int count = 16;
-			while (count--) {
+			while (*get()) {
 				std::cout << "[Main] Hello, this is testdll2.cc " << *get() << std::endl;
-				(*get())++;
+				(*get())--;
 			}
 
 			if (pthread_create(&mThreadId, NULL, dispatch, (void *)NULL) != 0) {

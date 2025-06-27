@@ -138,3 +138,7 @@ set(LIB
 # Declare Test
 
 bob_add_test_executable(bob "${TEST}" "${INC}" "${INC_SYS}" "${LIB}")
+
+add_dependencies(bob bob::source::testdll1)
+add_dependencies(bob bob::source::testdll2)
+add_dependencies(bob bob::source::testdll3)
