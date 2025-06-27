@@ -101,7 +101,7 @@ bool winmom_thread_static_tls_set(ProcessHandle *process, ThreadHandle *thread, 
 
 	TEB teb;
 	if ((address = winmom_thread_teb(process, thread, &teb))) {
-		LPVOID *entry = ((DWORD *)teb.Reserved1[11]) + index;
+		DWORD *entry = ((DWORD *)teb.Reserved1[11]) + index;
 
 		void *allocated;
 		if (!(allocated = MOM_process_allocate(process, NULL, size, MOM_PROTECT_R | MOM_PROTECT_W))) {

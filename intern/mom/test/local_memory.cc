@@ -123,7 +123,7 @@ TEST(MomLocal, Relocations) {
 	LISTBASE_FOREACH(ModuleHandle *, handle, &modules) {
 		ListBase relocations = MOM_module_relocations(handle);
 		LISTBASE_FOREACH(ModuleRelocation *, relocation, &relocations) {
-			EXPECT_NE(MOM_module_relocation_type(handle, relocation), kMomRelocationNone);
+			EXPECT_NE(MOM_module_relocation_type(handle, relocation), MOM_RELOCATION_NONE);
 		}
 		EXPECT_GT(LIB_listbase_count(&relocations), 0);
 	}

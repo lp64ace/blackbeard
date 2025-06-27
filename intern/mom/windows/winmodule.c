@@ -498,9 +498,7 @@ static bool winmom_module_resolve_exceptions(ModuleHandle *handle) {
 }
 
 static bool winmom_module_resolve_tls(ModuleHandle *handle) {
-	void *directory = winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_TLS);
-
-	if (!directory) {
+	if (!winmom_module_native_directory_address(handle, IMAGE_DIRECTORY_ENTRY_TLS)) {
 		return true;
 	}
 
@@ -1019,11 +1017,11 @@ int winmom_module_tls_index(ModuleHandle *handle) {
 	return 0;
 }
 
-void winmom_module_tls_logical(ModuleHandle *handle, ModuleTLS *tls) {
+void *winmom_module_tls_logical(ModuleHandle *handle, ModuleTLS *tls) {
 	return winmom_module_resolve_virtual_address_to_image(handle, tls->va);
 }
 
-void winmom_module_tls_physical(ModuleHandle *handle, ModuleTLS *tls) {
+void *winmom_module_tls_physical(ModuleHandle *handle, ModuleTLS *tls) {
 	return winmom_module_resolve_virtual_address_to_memory(handle, tls->va);
 }
 

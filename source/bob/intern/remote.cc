@@ -942,7 +942,7 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 			}
 
 			for (ULONG index = 0; index < KiUserInvertedFunctionTable.Count; index++) {
-				if (reinterpret_cast<void *>(KiUserInvertedFunctionTable.Entries[index].ImageBase) == MOM_module_get_address(handle)) {
+				if (POINTER_AS_INT(KiUserInvertedFunctionTable.Entries[index].ImageBase) == POINTER_AS_INT(MOM_module_get_address(handle))) {
 					return true;  // Already registered!
 				}
 			}
@@ -1022,7 +1022,7 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 			}
 
 			for (ULONG index = 0; index < KiUserInvertedFunctionTable.Count; index++) {
-				if (reinterpret_cast<void *>(KiUserInvertedFunctionTable.Entries[index].ImageBase) == MOM_module_get_address(handle)) {
+				if (POINTER_AS_INT(KiUserInvertedFunctionTable.Entries[index].ImageBase) == POINTER_AS_INT(MOM_module_get_address(handle))) {
 					if (KiUserInvertedFunctionTable.Entries[index].SizeOfTable != 0) {
 						return true;  // If Image has SAFESEH, RtlInsertInvertedFunctionTable is enough
 					}
@@ -1035,7 +1035,7 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 
 					uint32_t cookie;
 					MOM_process_read(worker->host(), (void *)0x7FFE0330, &cookie, sizeof(cookie));
-					uintptr_t encoded = _rotr(cookie ^ reinterpret_cast<uint32_t>(memory), cookie & 0x1F);
+					uintptr_t encoded = _rotr(cookie ^ POINTER_AS_INT(memory), cookie & 0x1F);
 
 					void *begin = &KiUserInvertedFunctionTable;
 					void *field = &KiUserInvertedFunctionTable.Entries[index].ExceptionDirectory;
@@ -1131,7 +1131,7 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 				return false;
 			}
 
-			local.Entries[local.Count].Base = (uint32_t)MOM_module_get_address(handle);
+			local.Entries[local.Count].Base = POINTER_AS_INT(MOM_module_get_address(handle));
 			local.Entries[local.Count].Size = (uint32_t)MOM_module_size(handle);
 			local.Count++;
 
