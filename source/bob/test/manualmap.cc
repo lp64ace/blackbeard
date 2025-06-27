@@ -79,7 +79,7 @@ TEST(BobManualMap, Local3) {
 	EXPECT_NE(address, nullptr);
 	MOM_process_close(self);
 }
-
+  
 TEST(BobManualMap, Other3) {
 	ListBase processes = MOM_process_open_by_name("notepad.exe");
 	if (LIB_listbase_is_empty(&processes)) {
