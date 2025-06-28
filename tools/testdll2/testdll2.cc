@@ -17,7 +17,7 @@ static unsigned char *get() {
 
 void *dispatch(void *userdata) {
 	while (*get()) {
-		std::cout << "[Thread] Hello, this is testdll2.cc " << *get() << std::endl;
+		std::cout << "[Thread] Hello, this is testdll2.cc " << (int)*get() << std::endl;
 		(*get())--;
 	}
 
@@ -36,7 +36,7 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 			}
 
 			while (*get()) {
-				std::cout << "[Main] Hello, this is testdll2.cc " << *get() << std::endl;
+				std::cout << "[Main] Hello, this is testdll2.cc " << (int)*get() << std::endl;
 				(*get())--;
 			}
 
