@@ -28,8 +28,6 @@ namespace {
 }
 
 TEST(BobManualMap, Local1) {
-	GTEST_SKIP();
-
 	ProcessHandle *self = MOM_process_self();
 
 	ASSERT_TIMEOUT({

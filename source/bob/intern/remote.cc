@@ -913,12 +913,12 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 	switch (worker->arch()) {
 		case MOM_ARCHITECTURE_AMD64: {
 			if (!_RtlInsertInvertedFunctionTable || !_LdrpInvertedFunctionTable) {
-				fprintf(stdout, "Using Win11 21H2 pattern for RtlInsertInvertedFunctionTable\n");
+				// fprintf(stdout, "Using Win11 21H2 pattern for RtlInsertInvertedFunctionTable\n");
 				_RtlInsertInvertedFunctionTable = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x48\x89\x5C\x24\x08\x57\x48\x83\xEC\x30\x8B\xDA", 12, 0x0);
 				_LdrpInvertedFunctionTable = BOB_remote_ntdll_symbol_ex(vworker, (const unsigned char[]) "\x49\x8b\xe8\x48\x8b\xfa\x0f\x84", 8, 0xF, 0x2, 0x6);
 			}
 			if (!_RtlInsertInvertedFunctionTable || !_LdrpInvertedFunctionTable) {
-				fprintf(stdout, "Using Win10 20H1 pattern for RtlInsertInvertedFunctionTable\n");
+				// fprintf(stdout, "Using Win10 20H1 pattern for RtlInsertInvertedFunctionTable\n");
 				_RtlInsertInvertedFunctionTable = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x48\x8d\x54\x24\x58\x48\x8b\xf9\xe8", 9, 0x11);
 				_LdrpInvertedFunctionTable = BOB_remote_ntdll_symbol_ex(vworker, (const unsigned char[]) "\x49\x8b\xe8\x48\x8b\xfa\x0f\x84", 8, 0xF, 0x2, 0x6);
 			}
@@ -1211,7 +1211,7 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 		return false;
 	}
 
-	fprintf(stdout, "[Remote] RtlAddVectoredExceptionHandler returned 0x%p\n", (void *)BOB_remote_saved(vworker, 0));
+	// fprintf(stdout, "[Remote] RtlAddVectoredExceptionHandler returned 0x%p\n", (void *)BOB_remote_saved(vworker, 0));
 
 	return true;
 }
@@ -1225,15 +1225,15 @@ bool BOB_remote_build_tls(RemoteWorker *vworker, void *real, void *tls) {
 		switch (worker->arch()) {
 			case MOM_ARCHITECTURE_AMD64: {
 				if (!_LdrpHandleTlsData) {
-					fprintf(stdout, "Using Win11 21H2 pattern for LdrpHandleTlsData\n");
+					// fprintf(stdout, "Using Win11 21H2 pattern for LdrpHandleTlsData\n");
 					_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x41\x55\x41\x56\x41\x57\x48\x81\xEC\xF0", 10, 0x0f);
 				}
 				if (!_LdrpHandleTlsData) {
-					fprintf(stdout, "Using Win10 19H1 pattern for LdrpHandleTlsData\n");
+					// fprintf(stdout, "Using Win10 19H1 pattern for LdrpHandleTlsData\n");
 					_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x74\x33\x44\x8d\x43\x09", 6, 0x46);
 				}
 				if (!_LdrpHandleTlsData) {
-					fprintf(stdout, "Using Win10 10RS4 pattern for LdrpHandleTlsData\n");
+					// fprintf(stdout, "Using Win10 10RS4 pattern for LdrpHandleTlsData\n");
 					_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x74\x33\x44\x8d\x43\x09", 6, 0x44);
 				}
 			} break;
