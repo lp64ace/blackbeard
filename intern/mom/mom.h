@@ -335,6 +335,8 @@ typedef bool (*fnMOM_thread_join)(struct ThreadHandle *handle);
 typedef bool (*fnMOM_thread_suspend)(struct ThreadHandle *handle);
 typedef bool (*fnMOM_thread_resume)(struct ThreadHandle *handle);
 typedef int (*fnMOM_thread_identifier)(struct ThreadHandle *handle);
+// Even if this doesn't return NULL the return address may not be owned by this process!
+typedef void *(*fnMOM_thread_teb)(struct ThreadHandle *handle);
 
 typedef bool (*fnMOM_thread_static_tls_set)(struct ProcessHandle *process, struct ThreadHandle *thread, int index, const void *data, size_t size);
 
@@ -347,6 +349,8 @@ extern fnMOM_thread_join MOM_thread_join;
 extern fnMOM_thread_suspend MOM_thread_suspend;
 extern fnMOM_thread_resume MOM_thread_resume;
 extern fnMOM_thread_identifier MOM_thread_identifier;
+// Even if this doesn't return NULL the return address may not be owned by this process!
+extern fnMOM_thread_teb MOM_thread_teb;
 
 extern fnMOM_thread_static_tls_set MOM_thread_static_tls_set;
 

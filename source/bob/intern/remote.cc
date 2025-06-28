@@ -435,8 +435,9 @@ public:
 		void *code;
 		if ((code = this->make())) {
 			// fprintf(stdout, "[Remote] Thread ID %d\n", MOM_thread_identifier(thread));
+			// fprintf(stdout, "[Remote] Thread TEB 0x%p\n", MOM_thread_teb(thread));
 			MOM_thread_queue_apc(thread, code, argument);
-			if (!MOM_event_wait(evtlocal, 5000)) {
+			if (!MOM_event_wait(evtlocal, -1)) {
 				fprintf(stderr, "[Error] shellcode timedout!\n");
 				return 0;
 			}
@@ -679,7 +680,8 @@ void *BOB_remote_write_manifest(RemoteWorker *worker, const void *vmanifest, siz
 	}
 	DWORD write;
 	if (!WriteFile(fpout, vmanifest, size, &write, NULL)) {
-		// return false
+		CloseHandle(fpout);
+		return NULL;
 	}
 	CloseHandle(fpout);
 
@@ -1313,24 +1315,43 @@ void *BOB_remote_load_dep(RemoteWorker *vworker, ModuleHandle *handle) {
 	return module;
 }
 
-bool BOB_remote_call_entry(RemoteWorker *worker, void *real, void *entry) {
+bool BOB_remote_call_entry(RemoteWorker *vworker, void *real, void *entry) {
+	RemoteWorkerImplementation *worker = unwrap(vworker);
+
 	if (!entry) {
 		return true;
 	}
 
-	BOB_remote_begin64(worker);
-	BOB_remote_bind_manifest(worker);
-	BOB_remote_push(worker, reinterpret_cast<uint64_t>(real), BOB_NODEREF);
-	BOB_remote_push(worker, 1, BOB_NODEREF); // DLL_PROCESS_ATTACH
-	BOB_remote_push(worker, 0, BOB_NODEREF);
-	BOB_remote_call(worker, BOB_STDCALL, entry);
-	BOB_remote_save(worker, 0);
-	BOB_remote_unbind_manifest(worker);
-	BOB_remote_notify(worker);
-	BOB_remote_end64(worker);
+	// Temporary solution for CRT init, TODO; find what the fuck is going on!
 
-	if (!BOB_remote_exec(worker, NULL)) {
+	uintptr_t stackbase;
+	if (!MOM_process_read(worker->host(), POINTER_OFFSET(MOM_thread_teb(worker->worker()), 0x8), &stackbase, sizeof(stackbase))) {
+		return false;
+	}
+
+	uintptr_t magic = 0x8000003000000002;
+	if (!MOM_process_write(worker->host(), POINTER_OFFSET(MOM_thread_teb(worker->worker()), 0x8), &magic, sizeof(magic))) {
+		return false;
+	}
+
+	BOB_remote_begin64(vworker);
+	BOB_remote_bind_manifest(vworker);
+	// BOB_remote_breakpoint(worker);
+	BOB_remote_push(vworker, reinterpret_cast<uint64_t>(real), BOB_NODEREF);
+	BOB_remote_push(vworker, 1, BOB_NODEREF); // DLL_PROCESS_ATTACH
+	BOB_remote_push(vworker, 0, BOB_NODEREF);
+	BOB_remote_call(vworker, BOB_STDCALL, entry);
+	BOB_remote_save(vworker, 0);
+	BOB_remote_unbind_manifest(vworker);
+	BOB_remote_notify(vworker);
+	BOB_remote_end64(vworker);
+
+	if (!BOB_remote_exec(vworker, NULL)) {
 		fprintf(stderr, "[Error] Entry failed\n");
+		return false;
+	}
+
+	if (!MOM_process_write(worker->host(), POINTER_OFFSET(MOM_thread_teb(worker->worker()), 0x8), &stackbase, sizeof(stackbase))) {
 		return false;
 	}
 
