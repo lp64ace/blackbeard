@@ -436,7 +436,7 @@ public:
 		if ((code = this->make())) {
 			// fprintf(stdout, "[Remote] Thread ID %d\n", MOM_thread_identifier(thread));
 			MOM_thread_queue_apc(thread, code, argument);
-			if (!MOM_event_wait(evtlocal, 500)) {
+			if (!MOM_event_wait(evtlocal, 5000)) {
 				fprintf(stderr, "[Error] shellcode timedout!\n");
 				return 0;
 			}
