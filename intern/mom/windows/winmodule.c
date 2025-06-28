@@ -784,20 +784,12 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 
 	handle->process = process;
 	handle->real = (uintptr_t)address;
+	handle->base = (uintptr_t)address;
 
 	if (handle->process) {
 		MOM_process_read(handle->process, address, handle->image, length);
 	} else {
 		memcpy(handle->image, address, length);
-	}
-
-	switch (MOM_module_architecture(handle)) {
-		case MOM_ARCHITECTURE_AMD32: {
-			handle->base = NT32(handle)->OptionalHeader.ImageBase;
-		} break;
-		case MOM_ARCHITECTURE_AMD64: {
-			handle->base = NT64(handle)->OptionalHeader.ImageBase;
-		} break;
 	}
 
 	if (!winmom_module_resolve(handle)) {

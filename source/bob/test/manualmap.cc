@@ -131,7 +131,7 @@ TEST(BobManualMap, LocalAlloc) {
 
 	ASSERT_TIMEOUT({
 		void *address = NULL;
-		if ((address = BOB_manual_map_image(self, datatoc_testdll3_dll, datatoc_testdll3_dll_size, BOB_REBASE_ALWAYS))) {
+		if ((address = BOB_manual_map_image(self, datatoc_memallocdll_dll, datatoc_memallocdll_dll_size, BOB_REBASE_ALWAYS))) {
 			// Do stuff...?
 		}
 		EXPECT_NE(address, nullptr);
