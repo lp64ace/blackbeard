@@ -10,8 +10,8 @@ static pthread_t mThreadId;
 #include <iostream>
 #include <vector>
 
-static int *get() {
-	static thread_local int num = 4;
+static unsigned char *get() {
+	static thread_local unsigned char num = 4;
 	return &num;
 }
 
