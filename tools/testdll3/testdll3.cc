@@ -18,8 +18,8 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 
 			std::vector<int> vector;
 
-			for (int i = 0; i < 16; i++) {
-				vector.push_back(vector.size());
+			for (int i = 1; i <= 16; i++) {
+				vector.push_back(i);
 			}
 
 			try {
@@ -27,9 +27,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 			} catch (const std::runtime_error &e) {
 				std::cout << "Caught exception: " << e.what() << std::endl;
 			}
-		} break;
-		case DLL_PROCESS_DETACH: {
-			// Nothing to do!
 		} break;
 	}
 

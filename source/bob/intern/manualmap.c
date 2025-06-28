@@ -198,7 +198,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		 * These are 'legit' portable executables but it would be nice to manual map these too!
 		 * TODO?
 		 */
-		fprintf(stdout, "[BOB] Load %s as dependency!\n", MOM_module_name(handle));
+		// fprintf(stdout, "[BOB] Load %s as dependency!\n", MOM_module_name(handle));
 
 		void *real = NULL;
 		if ((real = BOB_remote_load_dep(worker, handle))) {

@@ -20,9 +20,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 			
 			fprintf(stdout, "Hello, this is testdll1.c 0x%x\n", count);
 		} break;
-		case DLL_PROCESS_DETACH: {
-			// Nothing to do!
-		} break;
 	}
 	
 	return TRUE;

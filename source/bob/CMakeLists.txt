@@ -90,6 +90,18 @@ add_custom_command(
 		datatoc
 )
 
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/memalloc_resource.c
+	COMMAND
+		${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}
+	COMMAND
+		"$<TARGET_FILE:datatoc>" --src "$<TARGET_FILE:memallocdll>" --bin ${CMAKE_CURRENT_BINARY_DIR}/memalloc_resource.c
+	DEPENDS
+		memallocdll
+		datatoc
+)
+
 # -----------------------------------------------------------------------------
 # Define Include Directories (Test)
 
@@ -120,6 +132,7 @@ set(TEST
 	${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
 	${CMAKE_CURRENT_BINARY_DIR}/testdll2_resource.c
 	${CMAKE_CURRENT_BINARY_DIR}/testdll3_resource.c
+	${CMAKE_CURRENT_BINARY_DIR}/memalloc_resource.c
 	
 )
 
@@ -142,3 +155,4 @@ bob_add_test_executable(bob "${TEST}" "${INC}" "${INC_SYS}" "${LIB}")
 add_dependencies(bob bob::source::testdll1)
 add_dependencies(bob bob::source::testdll2)
 add_dependencies(bob bob::source::testdll3)
+add_dependencies(bob bob::source::memallocdll)

@@ -44,9 +44,6 @@ BOOL APIENTRY DllMain(HMODULE hModule, DWORD dwReason, LPVOID unused) {
 				return FALSE;
 			}
 		} break;
-		case DLL_PROCESS_DETACH: {
-			// Nothing to do!
-		} break;
 	}
 	
 	return TRUE;
