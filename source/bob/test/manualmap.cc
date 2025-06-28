@@ -44,8 +44,6 @@ TEST(BobManualMap, Local1) {
 }
 
 TEST(BobManualMap, Other1) {
-	GTEST_SKIP();
-
 	ListBase processes = MOM_process_open_by_name("notepad.exe");
 	if (LIB_listbase_is_empty(&processes)) {
 		GTEST_SKIP();
@@ -65,8 +63,6 @@ TEST(BobManualMap, Other1) {
 }
 
 TEST(BobManualMap, Local2) {
-	GTEST_SKIP();
-
 	ProcessHandle *self = MOM_process_self();
 
 	ASSERT_TIMEOUT({
@@ -81,8 +77,6 @@ TEST(BobManualMap, Local2) {
 }
 
 TEST(BobManualMap, Other2) {
-	GTEST_SKIP();
-
 	ListBase processes = MOM_process_open_by_name("notepad.exe");
 	if (LIB_listbase_is_empty(&processes)) {
 		GTEST_SKIP();
@@ -102,8 +96,6 @@ TEST(BobManualMap, Other2) {
 }
 
 TEST(BobManualMap, Local3) {
-	GTEST_SKIP();
-
 	ProcessHandle *self = MOM_process_self();
 
 	ASSERT_TIMEOUT({
@@ -118,8 +110,6 @@ TEST(BobManualMap, Local3) {
 }
   
 TEST(BobManualMap, Other3) {
-	GTEST_SKIP();
-
 	ListBase processes = MOM_process_open_by_name("notepad.exe");
 	if (LIB_listbase_is_empty(&processes)) {
 		GTEST_SKIP();
@@ -139,8 +129,6 @@ TEST(BobManualMap, Other3) {
 }
 
 TEST(BobManualMap, LocalAlloc) {
-	GTEST_SKIP();
-
 	ProcessHandle *self = MOM_process_self();
 
 	ASSERT_TIMEOUT({
