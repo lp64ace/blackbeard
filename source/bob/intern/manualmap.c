@@ -1,7 +1,7 @@
+#include "defines.h"
 #include "manualmap.h"
 #include "remote.h"
 
-#include "defines.h"
 #include "mom.h"
 
 #include <stdio.h>
@@ -104,7 +104,7 @@ void *BOB_manual_map_resolve_import(ProcessHandle *process, const char *libname,
 
 		if (exported) {
 			// Try to manual map the module into the process as well so that we can resolve the export!
-			if (BOB_manual_map_module(process, handle, kBobDependency)) {
+			if (BOB_manual_map_module(process, handle, BOB_DEPENDENCY)) {
 				MOM_module_close_collection(&collection);
 
 				// The next time we call this #BOB_manual_map_module must have updated the loaded modules to find this one!
@@ -121,7 +121,7 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 	void *real = MOM_module_get_address(handle);
 
 	switch (MOM_module_relocation_type(handle, relocation)) {
-		case kMomRelocationHigh: {
+		case MOM_RELOCATION_HIGH: {
 			uint16_t value;
 			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
 				return false;
@@ -133,7 +133,7 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 				return false;
 			}
 		} break;
-		case kMomRelocationLow: {
+		case MOM_RELOCATION_LOW: {
 			uint16_t value;
 			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
 				return false;
@@ -145,7 +145,7 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 				return false;
 			}
 		} break;
-		case kMomRelocationHighLow: {
+		case MOM_RELOCATION_HIGHLOW: {
 			uint32_t value;
 			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
 				return false;
@@ -157,7 +157,7 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 				return false;
 			}
 		} break;
-		case kMomRelocationDir64: {
+		case MOM_RELOCATION_DIR64: {
 			uint64_t value;
 			if (!MOM_process_read(process, MOM_module_relocation_physical(handle, relocation), &value, sizeof(value))) {
 				return false;
@@ -169,13 +169,13 @@ bool BOB_manual_map_module_relocation_apply(ProcessHandle *process, ModuleHandle
 				return false;
 			}
 		} break;
-		case kMomRelocationAbsolute:
-		case kMomRelocationHighAdj: {
+		case MOM_RELOCATION_ABSOLUTE:
+		case MOM_RELOCATION_HIGHADJ: {
 			// Nothing to DO!
 		} break;
 		default: {
 			/**
-			 * Unimplement relocation either by BOB or by MOM!
+			 * Unimplemented relocation either by BOB or by MOM!
 			 */
 			return false;
 		} break;
@@ -190,7 +190,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		return MOM_module_get_address(existing);
 	}
 
-	if ((flag & kBobDependency) != 0) {
+	if ((flag & BOB_DEPENDENCY) != 0) {
 		RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
 
 		/**
@@ -198,6 +198,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		 * These are 'legit' portable executables but it would be nice to manual map these too!
 		 * TODO?
 		 */
+		// fprintf(stdout, "[BOB] Load %s as dependency!\n", MOM_module_name(handle));
 
 		void *real = NULL;
 		if ((real = BOB_remote_load_dep(worker, handle))) {
@@ -212,12 +213,12 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 	size_t size = MOM_module_size(handle);
 
-	void *base = ((flag & kBobRebaseAlways) == 0) ? (void *)MOM_module_get_base(handle) : NULL;
+	void *base = ((flag & BOB_REBASE_ALWAYS) == 0) ? (void *)MOM_module_get_base(handle) : NULL;
 
 	void *real = NULL;
-	if (!(real = MOM_process_allocate(process, base, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
+	if (!(real = MOM_process_allocate(process, base, size, MOM_PROTECT_R | MOM_PROTECT_W | MOM_PROTECT_E))) {
 		// The PE has a base address that likes to be mapped to, but if relocation data are present we can map it elsewhere!
-		if (!(real = MOM_process_allocate(process, NULL, size, kMomProtectRead | kMomProtectWrite | kMomProtectExec))) {
+		if (!(real = MOM_process_allocate(process, NULL, size, MOM_PROTECT_R | MOM_PROTECT_W | MOM_PROTECT_E))) {
 			return NULL;
 		}
 	}
@@ -225,6 +226,11 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	MOM_module_set_address(handle, real);
 
 	// fprintf(stdout, "[BOB] module %s address BEGIN 0x%p END 0x%p\n", MOM_module_name(handle) ? MOM_module_name(handle) : "(null)", real, POINTER_OFFSET(real, size));
+
+	if (!MOM_process_write(process, MOM_module_physical(handle), MOM_module_logical(handle), MOM_module_header_size(handle))) {
+		MOM_process_free(process, real);
+		return NULL;
+	}
 
 	ListBase sections = MOM_module_sections(handle);
 
@@ -263,12 +269,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), MOM_module_import_expname(handle, imported), 8);
 		}
 
-		// if (MOM_module_import_expname(handle, imported)) {
-		// 	fprintf(stdout, "[BOB] %s import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
-		// } else {
-		// 	fprintf(stdout, "[BOB] %s import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
-		// }
-
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
 
 		/**
@@ -280,6 +280,14 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_physical_funk(handle, imported));
 				MOM_process_free(process, real);
 				return NULL;
+			}
+		}
+		else {
+			if (MOM_module_import_is_ordinal(handle, imported)) {
+				fprintf(stderr, "[BOB] Import %s was not resolved correctly!", MOM_module_import_expname(handle, imported));
+			}
+			else {
+				fprintf(stderr, "[BOB] Import #%hd was not resolved correctly!", MOM_module_import_expordinal(handle, imported));
 			}
 		}
 	}
@@ -294,12 +302,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			address = BOB_manual_map_resolve_import(process, MOM_module_import_libname(handle, imported), MOM_module_import_expname(handle, imported), 8);
 		}
 
-		// if (MOM_module_import_expname(handle, imported)) {
-		// 			fprintf(stdout, "[BOB] %s delayed import 0x%p %s\n", (address) ? "OK" : "WARN", address, MOM_module_import_expname(handle, imported));
-		// } else {
-		// 			fprintf(stdout, "[BOB] %s delayed import 0x%p #%d\n", (address) ? "OK" : "WARN", address, MOM_module_import_expordinal(handle, imported));
-		// }
-
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
 
 		/**
@@ -311,6 +313,14 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_physical_funk(handle, imported));
 				MOM_process_free(process, real);
 				return NULL;
+			}
+		}
+		else {
+			if (MOM_module_import_is_ordinal(handle, imported)) {
+				fprintf(stderr, "[BOB] DELAY Import %s was not resolved correctly!", MOM_module_import_expname(handle, imported));
+			}
+			else {
+				fprintf(stderr, "[BOB] DELAY Import #%hd was not resolved correctly!", MOM_module_import_expordinal(handle, imported));
 			}
 		}
 	}
@@ -336,7 +346,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	}
 
 	// fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
-	// fprintf(stdout, "%s\n", (const char *)MOM_module_manifest_logical(handle));
+	// fprintf(stdout, "%s", (const char *)MOM_module_manifest_logical(handle));
 	// fprintf(stdout, "[BOB] Manifest END--------------------------------------------------------------\n");
 
 	/**
@@ -352,11 +362,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		}
 	}
 
-	/**
-	 * TODO: Add TLS
-	 * \note In order to add TLS we need to have a testdll that has that...!
-	 */
-
 	bool install = true;
 
 	RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
@@ -367,8 +372,32 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			}
 		}
 
-		if (!BOB_remote_build_seh(worker, real, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
-			install &= false; // When this happens sometimes the remote process crashes!
+		if (!BOB_remote_build_tls(worker, real, MOM_module_tls_table_physical(handle))) {
+			install &= false;  // When this happens sometimes the remote process crashes!
+		}
+
+		// size_t tls_static_size;
+		// if ((tls_static_size = MOM_module_tls_static_size(handle))) {
+		// 	ThreadHandle *thread = BOB_remote_thread(worker);
+		// 	// Leaks memory! And only works for the worker thread, any new threads that spawn will have invalid static TLS data!
+		// 	if (!MOM_thread_static_tls_set(process, thread, MOM_module_tls_index(handle), MOM_module_tls_static_logical(handle), tls_static_size)) {
+		// 		fprintf(stderr, "[BOB] Failed to copy TLS data.\n");
+		// 	}
+		// }
+
+		// ListBase tlsentries = MOM_module_tls(handle);
+		// LISTBASE_FOREACH(ModuleTLS *, tlsentry, &tlsentries) {
+		// 	if (!BOB_remote_call_entry(worker, real, MOM_module_tls_physical(handle, tlsentry))) {
+		// 		install &= false;  // When this happens sometimes the remote process crashes!
+		// 	}
+		// }
+
+		if (!BOB_remote_build_seh(worker, handle, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
+			install &= false;  // When this happens sometimes the remote process crashes!
+		}
+
+		if (!BOB_remote_build_cookie(worker, MOM_module_cookie_physical(handle))) {
+			install &= false;
 		}
 
 		if (!BOB_remote_call_entry(worker, real, MOM_module_entry_physical(handle))) {

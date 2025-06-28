@@ -80,28 +80,28 @@ DWORD API_SET_NAMESPACE_ARRAY_version(void *self) {
  * { */
 
 static inline DWORD winmom_process_protection_to_native(int protect) {
-	if ((protect & kMomProtectRead) == 0 && (protect & kMomProtectWrite) == 0 && (protect & kMomProtectExec) == 0) { // 000
+	if ((protect & MOM_PROTECT_R) == 0 && (protect & MOM_PROTECT_W) == 0 && (protect & MOM_PROTECT_E) == 0) {  // 000
 		return PAGE_NOACCESS;
 	}
-	if ((protect & kMomProtectRead) == 0 && (protect & kMomProtectWrite) == 0 && (protect & kMomProtectExec) != 0) { // 001
+	if ((protect & MOM_PROTECT_R) == 0 && (protect & MOM_PROTECT_W) == 0 && (protect & MOM_PROTECT_E) != 0) {  // 001
 		return PAGE_EXECUTE;
 	}
-	if ((protect & kMomProtectRead) == 0 && (protect & kMomProtectWrite) != 0 && (protect & kMomProtectExec) == 0) { // 010
+	if ((protect & MOM_PROTECT_R) == 0 && (protect & MOM_PROTECT_W) != 0 && (protect & MOM_PROTECT_E) == 0) {  // 010
 		return PAGE_WRITECOPY;
 	}
-	if ((protect & kMomProtectRead) == 0 && (protect & kMomProtectWrite) != 0 && (protect & kMomProtectExec) != 0) { // 011
+	if ((protect & MOM_PROTECT_R) == 0 && (protect & MOM_PROTECT_W) != 0 && (protect & MOM_PROTECT_E) != 0) {  // 011
 		return PAGE_EXECUTE_WRITECOPY;
 	}
-	if ((protect & kMomProtectRead) != 0 && (protect & kMomProtectWrite) == 0 && (protect & kMomProtectExec) == 0) { // 100
+	if ((protect & MOM_PROTECT_R) != 0 && (protect & MOM_PROTECT_W) == 0 && (protect & MOM_PROTECT_E) == 0) {  // 100
 		return PAGE_READONLY;
 	}
-	if ((protect & kMomProtectRead) != 0 && (protect & kMomProtectWrite) == 0 && (protect & kMomProtectExec) != 0) { // 101
+	if ((protect & MOM_PROTECT_R) != 0 && (protect & MOM_PROTECT_W) == 0 && (protect & MOM_PROTECT_E) != 0) {  // 101
 		return PAGE_EXECUTE_READ;
 	}
-	if ((protect & kMomProtectRead) != 0 && (protect & kMomProtectWrite) != 0 && (protect & kMomProtectExec) == 0) { // 110
+	if ((protect & MOM_PROTECT_R) != 0 && (protect & MOM_PROTECT_W) != 0 && (protect & MOM_PROTECT_E) == 0) {  // 110
 		return PAGE_READWRITE;
 	}
-	if ((protect & kMomProtectRead) != 0 && (protect & kMomProtectWrite) != 0 && (protect & kMomProtectExec) != 0) { // 111
+	if ((protect & MOM_PROTECT_R) != 0 && (protect & MOM_PROTECT_W) != 0 && (protect & MOM_PROTECT_E) != 0) {  // 111
 		return PAGE_EXECUTE_READWRITE;
 	}
 	return PAGE_NOACCESS;
@@ -147,7 +147,7 @@ ListBase winmom_process_resolve_schema(const char *schemaname) {
 								int length = WideCharToMultiByte(CP_ACP, 0, wphysical, -1, physical, ARRAYSIZE(physical), 0, NULL);
 
 								SchemaEntry *entry = MEM_callocN(sizeof(SchemaEntry), "SchemaEntry");
-								memcpy(entry->physical, physical, length);
+								strncpy(entry->physical, physical, length);
 								LIB_addtail(&list, entry);
 							}
 
@@ -251,11 +251,11 @@ ProcessHandle *winmom_process_open(int identifier) {
 			}
 			local.FullDllName.Buffer = (PWSTR)raw;
 
-			CHAR FullDllName[MAX_PATH * 4];
-			int MaxLength = WideCharToMultiByte(CP_ACP, 0, local.FullDllName.Buffer, local.FullDllName.MaximumLength, FullDllName, ARRAYSIZE(FullDllName), 0, NULL);
+			CHAR fullname[MAX_PATH];
+			int length = WideCharToMultiByte(CP_ACP, 0, local.FullDllName.Buffer, local.FullDllName.MaximumLength, fullname, ARRAYSIZE(fullname), 0, NULL);
 			ModuleHandle *module = MOM_module_open_by_address(handle, local.DllBase, (size_t)local.Reserved3[1]);
 			if (module) {
-				memcpy(module->dllname, FullDllName, MaxLength);
+				strncpy(module->dllname, fullname, length);
 			}
 			LIB_addtail(&handle->modules, module);
 
@@ -304,7 +304,9 @@ size_t winmom_process_write(ProcessHandle *handle, void *address, const void *bu
 }
 
 void winmom_process_free(ProcessHandle *handle, void *address) {
-	VirtualFreeEx(winmom_process_handle(handle), address, 0, MEM_RELEASE);
+	if (address) {
+		VirtualFreeEx(winmom_process_handle(handle), address, 0, MEM_RELEASE);
+	}
 }
 
 void winmom_process_close(ProcessHandle *handle) {
@@ -365,12 +367,6 @@ ModuleHandle *winmom_process_module_find_by_name(ProcessHandle *handle, const ch
 	}
 
 	ModuleHandle *module = NULL;
-
-	/**
-	 * The following part is the slowest and most unoptimized part of the library!
-	 * 
-	 * TODO fix that!
-	 */
 
 	ListBase schema = winmom_process_resolve_schema(name);
 	LISTBASE_FOREACH(SchemaEntry *, entry, &schema) {

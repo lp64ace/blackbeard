@@ -62,6 +62,7 @@ typedef struct SchemaEntry {
 
 typedef NTSTATUS(NTAPI *fnNtQueryInformationProcess)(IN HANDLE ProcessHandle, IN PROCESSINFOCLASS ProcessInformationClass, OUT PVOID ProcessInformation, IN ULONG ProcessInformationLength, OUT PULONG ReturnLength OPTIONAL);
 typedef NTSTATUS(NTAPI *fnNtCreateThreadEx)(OUT PHANDLE ThreadHandle, IN ACCESS_MASK DesiredAccess, IN POBJECT_ATTRIBUTES ObjectAttributes OPTIONAL, IN HANDLE ProcessHandle, IN LPVOID Routine, IN PVOID Argument OPTIONAL, IN ULONG CreateFlags, IN SIZE_T ZeroBits, IN SIZE_T StackSize, IN SIZE_T MaximumStackSize, IN LPVOID AttributeList OPTIONAL);
+typedef NTSTATUS(NTAPI *fnNtQueryInformationThread)(IN HANDLE ThreadHandle, IN THREADINFOCLASS ThreadInformationClass, IN OUT PVOID ThreadInformation, IN ULONG ThreadInformationLength, OUT PULONG ReturnLength OPTIONAL);
 
 /** \} */
 
@@ -92,6 +93,14 @@ ListBase winmom_process_resolve_schema(const char *logical);
 HANDLE winmom_process_handle(struct ProcessHandle *handle);
 LPVOID winmom_process_peb(struct ProcessHandle *handle, PEB *peb);
 LPVOID winmom_current_peb(PEB *peb);
+
+/** \} */
+
+/* -------------------------------------------------------------------- */
+/** \name Thread Platform Dependent
+ * { */
+
+LPVOID winmom_thread_teb(struct ProcessHandle *process, struct ThreadHandle *thread, TEB *teb);
 
 /** \} */
 
