@@ -834,9 +834,6 @@ bool BOB_remote_build_cookie(RemoteWorker *vworker, void *cookieptr) {
 			fprintf(stderr, "[Error] Cookie failed.\n");
 			return false;
 		}
-
-		// [Remote] Cookie set [0x0000000180010440] = 0x000084BD5483A4D0
-		fprintf(stdout, "[Remote] Cookie set [0x%p] = 0x%p\n", cookieptr, (void *)cookie);
 	}
 
 	return true;
