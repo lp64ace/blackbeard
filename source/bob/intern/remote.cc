@@ -320,9 +320,9 @@ public:
 			return false;
 		}
 
-		ModuleHandle *kernel32 = MOM_process_module_find_by_name(this->process, "kernel32.dll");
-		ModuleExport *sleepex = MOM_module_export_find_by_name(kernel32, "SleepEx");
-		void *_SleepEx = MOM_module_export_physical(kernel32, sleepex);
+		ModuleHandle *ntdll = MOM_process_module_find_by_name(this->process, "ntdll.dll");
+		ModuleExport *ntdelayexecution = MOM_module_export_find_by_name(ntdll, "NtDelayExecution");
+		void *_NtDelayExecution = MOM_module_export_physical(ntdll, ntdelayexecution);
 
 		asmjit::x86::Assembler ASM(&codeholder);
 
@@ -333,15 +333,18 @@ public:
 		asmjit::Label loop = ASM.newLabel();
 		ASM.bind(loop);
 		{
-			push(0x05, BOB_NODEREF);
+			uint64_t delay;
+			delay = -10 * 1000 * 5;
 			push(0x01, BOB_NODEREF);
-			call(ASM, _SleepEx);
+			push((uint64_t)write(&delay, sizeof(delay)), BOB_NODEREF);
+			call(ASM, _NtDelayExecution);
 		}
 		ASM.jmp(loop);
-
 		if (ASM.is64Bit()) {
 			end_call64(ASM);
 		}
+
+		ASM.ret();
 
 		asmjit::Section *section = codeholder.sectionById(0);
 		asmjit::CodeBuffer buffer = section->buffer();
@@ -454,6 +457,13 @@ public:
 		return this->architecture;
 	}
 
+	uintptr_t set_local_manifest(uintptr_t manifest) {
+		return this->manifest = manifest;
+	}
+	uintptr_t get_local_manifest() const {
+		return manifest;
+	}
+
 private:
 	EventHandle *evtlocal = NULL;
 	ProcessHandle *process = NULL;
@@ -469,7 +479,8 @@ private:
 	void *code = NULL;
 	void *user = NULL;
 
-	size_t offset = 0;
+	uintptr_t offset = 0;
+	uintptr_t manifest = 0;
 
 	ListBase params;
 };
@@ -685,6 +696,15 @@ void *BOB_remote_write_manifest(RemoteWorker *worker, const void *vmanifest, siz
 	}
 	CloseHandle(fpout);
 
+	ACTCTX context;
+	memset(&context, 0, sizeof(ACTCTX));
+	context.cbSize = sizeof(ACTCTX);
+	context.lpSource = filename;
+
+	if (!unwrap(worker)->set_local_manifest((uintptr_t)CreateActCtx(&context))) {
+		return NULL;
+	}
+
 	return BOB_remote_write_ex(worker, filename, sizeof(filename));
 }
 
@@ -737,10 +757,11 @@ bool BOB_remote_bind_manifest(RemoteWorker *vworker) {
 		return true;
 	}
 
-	ModuleHandle *kernel32 = MOM_process_module_find_by_name(worker->host(), "kernel32.dll");
-	ModuleExport *activateactctx = MOM_module_export_find_by_name(kernel32, "ActivateActCtx");
-	void *_ActivateActCtx = MOM_module_export_physical(kernel32, activateactctx);
+	ModuleHandle *ntdll = MOM_process_module_find_by_name(worker->host(), "ntdll.dll");
+	ModuleExport *activateactctx = MOM_module_export_find_by_name(ntdll, "RtlActivateActivationContext");
+	void *_ActivateActCtx = MOM_module_export_physical(ntdll, activateactctx);
 
+	BOB_remote_push(vworker, (uint64_t)0, BOB_NODEREF);
 	BOB_remote_push(vworker, (uint64_t)manifest, BOB_NODEREF);
 	BOB_remote_push(vworker, (uint64_t)worker->ptrcookie(), BOB_NODEREF);
 	BOB_remote_call(vworker, BOB_WIN64, _ActivateActCtx);
@@ -761,15 +782,29 @@ bool BOB_remote_unbind_manifest(RemoteWorker *vworker) {
 		return true;
 	}
 
-	ModuleHandle *kernel32 = MOM_process_module_find_by_name(worker->host(), "kernel32.dll");
-	ModuleExport *deactivateactctx = MOM_module_export_find_by_name(kernel32, "DeactivateActCtx");
-	void *_DeactivateActCtx = MOM_module_export_physical(kernel32, deactivateactctx);
+	ModuleHandle *ntdll = MOM_process_module_find_by_name(worker->host(), "ntdll.dll");
+	ModuleExport *deactivateactctx = MOM_module_export_find_by_name(ntdll, "RtlDeactivateActivationContext");
+	void *_DeactivateActCtx = MOM_module_export_physical(ntdll, deactivateactctx);
 
 	BOB_remote_push(vworker, 0, BOB_NODEREF);
 	BOB_remote_push(vworker, (uint64_t)worker->ptrcookie(), BOB_DEREF);
 	BOB_remote_call(vworker, BOB_WIN64, _DeactivateActCtx);
 	BOB_remote_save(vworker, 2);
 
+	return true;
+}
+
+bool BOB_remote_bind_local_manifest(RemoteWorker *worker, uint64_t *cookie) {
+	if (unwrap(worker)->get_local_manifest()) {
+		return ActivateActCtx((HANDLE)unwrap(worker)->get_local_manifest(), cookie);
+	}
+	return true;
+}
+
+bool BOB_remote_unbind_local_manifest(RemoteWorker *worker, uint64_t cookie) {
+	if (unwrap(worker)->get_local_manifest()) {
+		return DeactivateActCtx(0, cookie);
+	}
 	return true;
 }
 
@@ -800,7 +835,8 @@ bool BOB_remote_build_cookie(RemoteWorker *vworker, void *cookieptr) {
 			return false;
 		}
 
-		// fprintf(stdout, "[Remote] Cookie set 0x%llx\n", cookie);
+		// [Remote] Cookie set [0x0000000180010440] = 0x000084BD5483A4D0
+		fprintf(stdout, "[Remote] Cookie set [0x%p] = 0x%p\n", cookieptr, (void *)cookie);
 	}
 
 	return true;
@@ -1218,51 +1254,46 @@ bool BOB_remote_build_seh(RemoteWorker *vworker, ModuleHandle *handle, void *seh
 	return true;
 }
 
-bool BOB_remote_build_tls(RemoteWorker *vworker, void *real, void *tls) {
-	if (tls) {
-		RemoteWorkerImplementation *worker = unwrap(vworker);
+bool BOB_remote_build_tls(RemoteWorker *vworker, struct ModuleHandle *handle) {
+	RemoteWorkerImplementation *worker = unwrap(vworker);
 
-		void *_LdrpHandleTlsData = NULL;
+	void *_LdrpHandleTlsData = NULL;
 
-		switch (worker->arch()) {
-			case MOM_ARCHITECTURE_AMD64: {
-				if (!_LdrpHandleTlsData) {
-					// fprintf(stdout, "Using Win11 21H2 pattern for LdrpHandleTlsData\n");
-					_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x41\x55\x41\x56\x41\x57\x48\x81\xEC\xF0", 10, 0x0f);
-				}
-				if (!_LdrpHandleTlsData) {
-					// fprintf(stdout, "Using Win10 19H1 pattern for LdrpHandleTlsData\n");
-					_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x74\x33\x44\x8d\x43\x09", 6, 0x46);
-				}
-				if (!_LdrpHandleTlsData) {
-					// fprintf(stdout, "Using Win10 10RS4 pattern for LdrpHandleTlsData\n");
-					_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x74\x33\x44\x8d\x43\x09", 6, 0x44);
-				}
-			} break;
-		}
+	switch (worker->arch()) {
+		case MOM_ARCHITECTURE_AMD64: {
+			if (!_LdrpHandleTlsData) {
+				// fprintf(stdout, "Using Win11 21H2 pattern for LdrpHandleTlsData\n");
+				_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x41\x55\x41\x56\x41\x57\x48\x81\xEC\xF0", 10, 0x0f);
+			}
+			if (!_LdrpHandleTlsData) {
+				// fprintf(stdout, "Using Win10 19H1 pattern for LdrpHandleTlsData\n");
+				_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x74\x33\x44\x8d\x43\x09", 6, 0x46);
+			}
+			if (!_LdrpHandleTlsData) {
+				// fprintf(stdout, "Using Win10 10RS4 pattern for LdrpHandleTlsData\n");
+				_LdrpHandleTlsData = BOB_remote_ntdll_symbol(vworker, (const unsigned char[]) "\x74\x33\x44\x8d\x43\x09", 6, 0x44);
+			}
+		} break;
+	}
 
-		if (!_LdrpHandleTlsData) {
-			fprintf(stderr, "[Error] LdrpHandleTlsData not found!\n");
-			return false;
-		}
+	if (!_LdrpHandleTlsData) {
+		fprintf(stderr, "[Error] LdrpHandleTlsData not found!\n");
+		return false;
+	}
 
-		// TODO This is windows architecture dependent!
-		LDR_DATA_TABLE_ENTRY self;
-		self.DllBase = real;
+	// TODO This is windows architecture dependent!
+	LDR_DATA_TABLE_ENTRY self;
+	self.DllBase = MOM_module_get_address(handle);
 
-		BOB_remote_begin64(vworker);
-		BOB_remote_bind_manifest(vworker);
-		BOB_remote_push_ex(vworker, &self, sizeof(self));
-		BOB_remote_call(vworker, BOB_STDCALL, _LdrpHandleTlsData);
-		BOB_remote_save(vworker, 0);
-		BOB_remote_unbind_manifest(vworker);
-		BOB_remote_notify(vworker);
-		BOB_remote_end64(vworker);
+	BOB_remote_begin64(vworker);
+	BOB_remote_push_ex(vworker, &self, 0x100);
+	BOB_remote_call(vworker, BOB_THISCALL, _LdrpHandleTlsData);
+	BOB_remote_save(vworker, 0);
+	BOB_remote_notify(vworker);
+	BOB_remote_end64(vworker);
 
-		if (!NT_SUCCESS(BOB_remote_exec(vworker, NULL))) {
-			fprintf(stderr, "[Error] LdrpHandleTlsData returned error 0x%p\n", (void *)BOB_remote_saved(vworker, 0));
-			return false;
-		}
+	if (!NT_SUCCESS(BOB_remote_exec(vworker, NULL))) {
+		return false;
 	}
 
 	return true;
@@ -1310,54 +1341,48 @@ void *BOB_remote_load_dep(RemoteWorker *vworker, ModuleHandle *handle) {
 		return NULL;
 	}
 
-	// fprintf(stdout, "[Remote] LdrLoadDll %s returned 0x%p\n", MOM_module_name(handle), module);
-
 	return module;
 }
 
-bool BOB_remote_call_entry(RemoteWorker *vworker, void *real, void *entry) {
+bool BOB_remote_call_entry(RemoteWorker *vworker, struct ModuleHandle *handle) {
 	RemoteWorkerImplementation *worker = unwrap(vworker);
 
-	if (!entry) {
+	if (!MOM_module_entry_physical(handle)) {
 		return true;
-	}
-
-	// Temporary solution for CRT init, TODO; find what the fuck is going on!
-
-	uintptr_t stackbase;
-	if (!MOM_process_read(worker->host(), POINTER_OFFSET(MOM_thread_teb(worker->worker()), 0x8), &stackbase, sizeof(stackbase))) {
-		return false;
-	}
-
-	uintptr_t magic = 0x8000003000000002;
-	if (!MOM_process_write(worker->host(), POINTER_OFFSET(MOM_thread_teb(worker->worker()), 0x8), &magic, sizeof(magic))) {
-		return false;
 	}
 
 	BOB_remote_begin64(vworker);
 	BOB_remote_bind_manifest(vworker);
-	// BOB_remote_breakpoint(worker);
-	BOB_remote_push(vworker, reinterpret_cast<uint64_t>(real), BOB_NODEREF);
+	
+	ListBase entries = MOM_module_tls(handle);
+	LISTBASE_FOREACH(ModuleTLS *, tls, &entries) {
+		BOB_remote_push(vworker, reinterpret_cast<uint64_t>(MOM_module_get_address(handle)), BOB_NODEREF);
+		BOB_remote_push(vworker, 1, BOB_NODEREF); // DLL_PROCESS_ATTACH
+		BOB_remote_push(vworker, 0, BOB_NODEREF);
+		BOB_remote_call(vworker, BOB_STDCALL, MOM_module_tls_physical(handle, tls));
+		// fprintf(stdout, "[Remote] TLS entry 0x%p\n", MOM_module_tls_physical(handle, tls));
+	}
+
+	BOB_remote_push(vworker, reinterpret_cast<uint64_t>(MOM_module_get_address(handle)), BOB_NODEREF);
 	BOB_remote_push(vworker, 1, BOB_NODEREF); // DLL_PROCESS_ATTACH
 	BOB_remote_push(vworker, 0, BOB_NODEREF);
-	BOB_remote_call(vworker, BOB_STDCALL, entry);
+	BOB_remote_call(vworker, BOB_STDCALL, MOM_module_entry_physical(handle));
 	BOB_remote_save(vworker, 0);
 	BOB_remote_unbind_manifest(vworker);
 	BOB_remote_notify(vworker);
 	BOB_remote_end64(vworker);
+
+	// fprintf(stdout, "[Remote] DLL entry 0x%p\n", MOM_module_entry_physical(handle));
 
 	if (!BOB_remote_exec(vworker, NULL)) {
 		fprintf(stderr, "[Error] Entry failed\n");
 		return false;
 	}
 
-	if (!MOM_process_write(worker->host(), POINTER_OFFSET(MOM_thread_teb(worker->worker()), 0x8), &stackbase, sizeof(stackbase))) {
-		return false;
-	}
-
-	// fprintf(stdout, "[Remote] BindManifest returned %s\n", (BOB_remote_saved(worker, 1)) ? "TRUE" : "FALSE");
-	// fprintf(stdout, "[Remote] Entry returned %s\n", (BOB_remote_saved(worker, 0)) ? "TRUE" : "FALSE");
-	// fprintf(stdout, "[Remote] UnbindManifest returned %s\n", (BOB_remote_saved(worker, 2)) ? "TRUE" : "FALSE");
+	// fprintf(stdout, "[Remote] TLS returned %s\n", (NT_SUCCESS(BOB_remote_saved(vworker, 3))) ? "TRUE" : "FALSE");
+	// fprintf(stdout, "[Remote] BindManifest returned %s\n", (NT_SUCCESS(BOB_remote_saved(vworker, 1))) ? "TRUE" : "FALSE");
+	// fprintf(stdout, "[Remote] Entry 0x%p returned %s\n", MOM_module_entry_physical(handle), (BOB_remote_saved(vworker, 0)) ? "TRUE" : "FALSE");
+	// fprintf(stdout, "[Remote] UnbindManifest returned %s\n", (NT_SUCCESS(BOB_remote_saved(vworker, 2))) ? "TRUE" : "FALSE");
 
 	return true;
 }

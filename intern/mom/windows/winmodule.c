@@ -749,6 +749,7 @@ ListBase winmom_module_open_by_name(ProcessHandle *process, const char *name) {
 			LIB_addtail(&list, handle);
 		}
 	}
+	
 	LIB_addtail(&list, winmom_module_open_by_name_from_memory(process, name));
 	LIB_freelistN(&schema);
 
