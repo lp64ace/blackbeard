@@ -100,6 +100,7 @@ typedef void *(*fnMOM_module_section_logical)(struct ModuleHandle *handle, struc
 // Even if this doesn't return NULL the return address may not be owned by this process!
 typedef void *(*fnMOM_module_section_physical)(struct ModuleHandle *handle, struct ModuleSection *section);
 typedef int (*fnMOM_module_section_protection)(struct ModuleHandle *handle, struct ModuleSection *section);
+typedef size_t (*fnMOM_module_section_raw_size)(struct ModuleHandle *handle, struct ModuleSection *section);
 typedef size_t (*fnMOM_module_section_size)(struct ModuleHandle *handle, struct ModuleSection *section);
 
 typedef const char *(*fnMOM_module_export_name)(struct ModuleHandle *handle, struct ModuleExport *exported);
@@ -203,6 +204,7 @@ extern fnMOM_module_section_logical MOM_module_section_logical;
 // Even if this doesn't return NULL the return address may not be owned by this process!
 extern fnMOM_module_section_physical MOM_module_section_physical;
 extern fnMOM_module_section_protection MOM_module_section_protection;
+extern fnMOM_module_section_raw_size MOM_module_section_raw_size;
 extern fnMOM_module_section_size MOM_module_section_size;
 
 extern fnMOM_module_import_is_ordinal MOM_module_import_is_ordinal;

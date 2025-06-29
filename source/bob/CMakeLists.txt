@@ -139,6 +139,7 @@ set(INC_SYS
 
 set(TEST
 	test/manualmap.cc
+	test/bonus.c
 	
 	# Resources
 	${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c

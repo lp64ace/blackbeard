@@ -190,9 +190,8 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		return MOM_module_get_address(existing);
 	}
 
-	RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
-
 	if ((flag & BOB_DEPENDENCY) != 0) {
+		RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
 		/**
 		 * Dependency modules are usually official PE like ucrtbased.dll!
 		 * These are 'legit' portable executables but it would be nice to manual map these too!
@@ -219,7 +218,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	if (!(real = MOM_process_allocate(process, base, size, MOM_PROTECT_R | MOM_PROTECT_W | MOM_PROTECT_E))) {
 		// The PE has a base address that likes to be mapped to, but if relocation data are present we can map it elsewhere!
 		if (!(real = MOM_process_allocate(process, NULL, size, MOM_PROTECT_R | MOM_PROTECT_W | MOM_PROTECT_E))) {
-			BOB_remote_worker_close(worker);
 			return NULL;
 		}
 	}
@@ -230,7 +228,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 	if (!MOM_process_write(process, MOM_module_physical(handle), MOM_module_logical(handle), MOM_module_header_size(handle))) {
 		MOM_process_free(process, real);
-		BOB_remote_worker_close(worker);
 		return NULL;
 	}
 
@@ -242,10 +239,9 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	 */
 
 	LISTBASE_FOREACH(ModuleSection *, section, &sections) {
-		if (!MOM_process_write(process, MOM_module_section_physical(handle, section), MOM_module_section_logical(handle, section), MOM_module_section_size(handle, section))) {
+		if (!MOM_process_write(process, MOM_module_section_physical(handle, section), MOM_module_section_logical(handle, section), MOM_module_section_raw_size(handle, section))) {
 			fprintf(stderr, "[BOB] Failed to copy section %s.\n", MOM_module_section_name(handle, section));
 			MOM_process_free(process, real);
-			BOB_remote_worker_close(worker);
 			return NULL;
 		}
 	}
@@ -262,15 +258,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	 * The imports especially on windows are a mess, we need to follow imports to different modules, etc...!
 	 */
 
-	if (MOM_module_manifest_logical(handle)) {
-		if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
-			fprintf(stderr, "[BOB] Failed to create activation context.\n");
-			MOM_process_free(process, real);
-			BOB_remote_worker_close(worker);
-			return NULL;
-		}
-	}
-
 	ListBase imports = MOM_module_imports(handle);
 	LISTBASE_FOREACH(ModuleImport *, imported, &imports) {
 		void *address = NULL;
@@ -283,6 +270,14 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
 
+#if 0
+		if (MOM_module_import_is_ordinal(handle, imported)) {
+			fprintf(stdout, "[0x%p] < 0x%p | #%d\n", MOM_module_import_physical_funk(handle, imported), address, MOM_module_import_expordinal(handle, imported));
+		} else {
+			fprintf(stdout, "[0x%p] < 0x%p | %s\n", MOM_module_import_physical_funk(handle, imported), address, MOM_module_import_expname(handle, imported));
+		}
+#endif
+
 		/**
 		 * There are imports like #QueryOOBESupport from kernel32.dll that on some platforms are non-existing!
 		 * These are not reasons to fail the procedure, ignore these imports...
@@ -291,7 +286,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			if (!MOM_process_write(process, MOM_module_import_physical_funk(handle, imported), &address, ptrsize)) {
 				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_physical_funk(handle, imported));
 				MOM_process_free(process, real);
-				BOB_remote_worker_close(worker);
 				return NULL;
 			}
 		}
@@ -325,7 +319,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			if (!MOM_process_write(process, MOM_module_import_physical_funk(handle, imported), &address, ptrsize)) {
 				fprintf(stderr, "[BOB] Failed to copy import to address 0x%p.\n", MOM_module_import_physical_funk(handle, imported));
 				MOM_process_free(process, real);
-				BOB_remote_worker_close(worker);
 				return NULL;
 			}
 		}
@@ -354,11 +347,25 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			if (!BOB_manual_map_module_relocation_apply(process, handle, relocation, delta)) {
 				fprintf(stderr, "[BOB] Failed to apply relocation.\n");
 				MOM_process_free(process, real);
-				BOB_remote_worker_close(worker);
 				return NULL;
 			}
 		}
 	}
+
+#if 0
+	void *copy = malloc(MOM_module_size(handle));
+	MOM_process_read(process, real, copy, MOM_module_size(handle));
+
+	fprintf(stdout, "\n");
+	for (size_t i = 0; i < MOM_module_size(handle); i++) {
+		if (i == 0 || (i % 16) == 0) {
+			fprintf(stdout, "\n0x%p ", (void *)POINTER_OFFSET(real, i));
+		}
+		fprintf(stdout, "%02x ", *(const unsigned char *)POINTER_OFFSET(copy, i));
+	}
+	fprintf(stdout, "\n");
+	free(copy);
+#endif
 
 	// fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
 	// fprintf(stdout, "%s", (const char *)MOM_module_manifest_logical(handle));
@@ -373,15 +380,22 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		if (!MOM_process_protect(process, MOM_module_section_physical(handle, section), MOM_module_section_size(handle, section), protection)) {
 			fprintf(stderr, "[BOB] Failed to protect section %s.\n", MOM_module_section_name(handle, section));
 			MOM_process_free(process, real);
-			BOB_remote_worker_close(worker);
 			return NULL;
 		}
 	}
 
 	bool install = true;
 
+	RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
+
+	if (MOM_module_manifest_logical(handle)) {
+		if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
+			install &= false; // When this happens sometimes the remote process crashes!
+		}
+	}
+
 	if (!BOB_remote_build_seh(worker, handle, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
-		install &= false;  // When this happens sometimes the remote process crashes!
+		install &= false; // When this happens sometimes the remote process crashes!
 	}
 
 	if (!BOB_remote_build_cookie(worker, MOM_module_cookie_physical(handle))) {

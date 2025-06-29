@@ -1350,6 +1350,7 @@ bool BOB_remote_call_entry(RemoteWorker *vworker, struct ModuleHandle *handle) {
 
 	BOB_remote_begin64(vworker);
 	BOB_remote_bind_manifest(vworker);
+	// BOB_remote_breakpoint(vworker);
 	
 	ListBase entries = MOM_module_tls(handle);
 	LISTBASE_FOREACH(ModuleTLS *, tls, &entries) {
