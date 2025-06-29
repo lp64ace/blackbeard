@@ -749,6 +749,7 @@ ListBase winmom_module_open_by_name(ProcessHandle *process, const char *name) {
 			LIB_addtail(&list, handle);
 		}
 	}
+	
 	LIB_addtail(&list, winmom_module_open_by_name_from_memory(process, name));
 	LIB_freelistN(&schema);
 
@@ -784,20 +785,12 @@ ModuleHandle *winmom_module_open_by_address(ProcessHandle *process, const void *
 
 	handle->process = process;
 	handle->real = (uintptr_t)address;
+	handle->base = (uintptr_t)address;
 
 	if (handle->process) {
 		MOM_process_read(handle->process, address, handle->image, length);
 	} else {
 		memcpy(handle->image, address, length);
-	}
-
-	switch (MOM_module_architecture(handle)) {
-		case MOM_ARCHITECTURE_AMD32: {
-			handle->base = NT32(handle)->OptionalHeader.ImageBase;
-		} break;
-		case MOM_ARCHITECTURE_AMD64: {
-			handle->base = NT64(handle)->OptionalHeader.ImageBase;
-		} break;
 	}
 
 	if (!winmom_module_resolve(handle)) {
@@ -908,6 +901,12 @@ int winmom_module_section_protection(ModuleHandle *handle, ModuleSection *sectio
 	}
 
 	return 0;
+}
+
+size_t winmom_module_section_raw_size(ModuleHandle *handle, ModuleSection *section) {
+	IMAGE_SECTION_HEADER *header = (IMAGE_SECTION_HEADER *)section->private;
+
+	return header->SizeOfRawData;
 }
 
 size_t winmom_module_section_size(ModuleHandle *handle, ModuleSection *section) {
@@ -1103,6 +1102,7 @@ fnMOM_module_section_logical MOM_module_section_logical = winmom_module_section_
 // Even if this doesn't return NULL the return address may not be owned by this process!
 fnMOM_module_section_physical MOM_module_section_physical = winmom_module_section_physical;
 fnMOM_module_section_protection MOM_module_section_protection = winmom_module_section_protection;
+fnMOM_module_section_raw_size MOM_module_section_raw_size = winmom_module_section_raw_size;
 fnMOM_module_section_size MOM_module_section_size = winmom_module_section_size;
 
 fnMOM_module_export_logical MOM_module_export_logical = winmom_module_export_logical;

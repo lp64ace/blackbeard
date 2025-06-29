@@ -102,6 +102,18 @@ add_custom_command(
 		datatoc
 )
 
+add_custom_command(
+	OUTPUT
+		${CMAKE_CURRENT_BINARY_DIR}/xorstrdll_resource.c
+	COMMAND
+		${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}
+	COMMAND
+		"$<TARGET_FILE:datatoc>" --src "$<TARGET_FILE:xorstrdll>" --bin ${CMAKE_CURRENT_BINARY_DIR}/xorstrdll_resource.c
+	DEPENDS
+		xorstrdll
+		datatoc
+)
+
 # -----------------------------------------------------------------------------
 # Define Include Directories (Test)
 
@@ -127,12 +139,14 @@ set(INC_SYS
 
 set(TEST
 	test/manualmap.cc
+	test/bonus.c
 	
 	# Resources
 	${CMAKE_CURRENT_BINARY_DIR}/testdll1_resource.c
 	${CMAKE_CURRENT_BINARY_DIR}/testdll2_resource.c
 	${CMAKE_CURRENT_BINARY_DIR}/testdll3_resource.c
 	${CMAKE_CURRENT_BINARY_DIR}/memalloc_resource.c
+	${CMAKE_CURRENT_BINARY_DIR}/xorstrdll_resource.c
 	
 )
 
@@ -156,3 +170,4 @@ add_dependencies(bob bob::source::testdll1)
 add_dependencies(bob bob::source::testdll2)
 add_dependencies(bob bob::source::testdll3)
 add_dependencies(bob bob::source::memallocdll)
+add_dependencies(bob bob::source::xorstrdll)

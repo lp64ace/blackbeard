@@ -80,11 +80,14 @@ bool BOB_remote_build_manifest(struct RemoteWorker *worker, const void *manifest
 bool BOB_remote_bind_manifest(struct RemoteWorker *worker);
 bool BOB_remote_unbind_manifest(struct RemoteWorker *worker);
 
+bool BOB_remote_bind_local_manifest(struct RemoteWorker *worker, uint64_t *cookie);
+bool BOB_remote_unbind_local_manifest(struct RemoteWorker *worker, uint64_t cookie);
+
 bool BOB_remote_build_cookie(struct RemoteWorker *worker, void *cookieptr);
 bool BOB_remote_build_seh(struct RemoteWorker *worker, struct ModuleHandle *handle, void *seh, size_t count);
-bool BOB_remote_build_tls(struct RemoteWorker *worker, void *real, void *tls);
+bool BOB_remote_build_tls(struct RemoteWorker *worker, struct ModuleHandle *handle);
 void *BOB_remote_load_dep(struct RemoteWorker *worker, struct ModuleHandle *handle);
-bool BOB_remote_call_entry(struct RemoteWorker *worker, void *real, void *entry);
+bool BOB_remote_call_entry(struct RemoteWorker *worker, struct ModuleHandle *handle);
 
 /** \} */
 

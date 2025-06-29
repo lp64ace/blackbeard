@@ -328,20 +328,20 @@ int winmom_process_identifier(ProcessHandle *handle) {
 
 ModuleHandle *winmom_process_module_push(ProcessHandle *handle, const ModuleHandle *module) {
 	if (MOM_module_name(module)) {
-		ListBase duplicates = MOM_module_open_by_file(MOM_module_name(module));
+		ListBase duplicates = MOM_module_open_by_name(handle, MOM_module_name(module));
+		if (!LIB_listbase_is_empty(&duplicates)) {
+			return duplicates.first;
+		}
 
-		if (LIB_listbase_is_single(&duplicates)) {
-			ModuleHandle *duplicate = (ModuleHandle *)duplicates.first;
-
+		ModuleHandle *duplicate = (ModuleHandle *)MOM_module_open_by_address(handle, MOM_module_get_address(module), MOM_module_size(module));
+		if (duplicate) {
 			/** Since we use the name to find a module copy the name from the original module! **/
 			memcpy(duplicate->dllname, module->dllname, sizeof(duplicate->dllname));
 			duplicate->real = module->real;
 			LIB_addtail(&handle->modules, duplicate);
-
-			return duplicate;
 		}
 
-		return NULL;
+		return duplicate;
 	}
 
 	return NULL;

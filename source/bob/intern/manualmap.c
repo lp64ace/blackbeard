@@ -192,7 +192,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 	if ((flag & BOB_DEPENDENCY) != 0) {
 		RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
-
 		/**
 		 * Dependency modules are usually official PE like ucrtbased.dll!
 		 * These are 'legit' portable executables but it would be nice to manual map these too!
@@ -240,7 +239,7 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	 */
 
 	LISTBASE_FOREACH(ModuleSection *, section, &sections) {
-		if (!MOM_process_write(process, MOM_module_section_physical(handle, section), MOM_module_section_logical(handle, section), MOM_module_section_size(handle, section))) {
+		if (!MOM_process_write(process, MOM_module_section_physical(handle, section), MOM_module_section_logical(handle, section), MOM_module_section_raw_size(handle, section))) {
 			fprintf(stderr, "[BOB] Failed to copy section %s.\n", MOM_module_section_name(handle, section));
 			MOM_process_free(process, real);
 			return NULL;
@@ -270,6 +269,14 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		}
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
+
+#if 0
+		if (MOM_module_import_is_ordinal(handle, imported)) {
+			fprintf(stdout, "[0x%p] < 0x%p | #%d\n", MOM_module_import_physical_funk(handle, imported), address, MOM_module_import_expordinal(handle, imported));
+		} else {
+			fprintf(stdout, "[0x%p] < 0x%p | %s\n", MOM_module_import_physical_funk(handle, imported), address, MOM_module_import_expname(handle, imported));
+		}
+#endif
 
 		/**
 		 * There are imports like #QueryOOBESupport from kernel32.dll that on some platforms are non-existing!
@@ -345,6 +352,21 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 		}
 	}
 
+#if 0
+	void *copy = malloc(MOM_module_size(handle));
+	MOM_process_read(process, real, copy, MOM_module_size(handle));
+
+	fprintf(stdout, "\n");
+	for (size_t i = 0; i < MOM_module_size(handle); i++) {
+		if (i == 0 || (i % 16) == 0) {
+			fprintf(stdout, "\n0x%p ", (void *)POINTER_OFFSET(real, i));
+		}
+		fprintf(stdout, "%02x ", *(const unsigned char *)POINTER_OFFSET(copy, i));
+	}
+	fprintf(stdout, "\n");
+	free(copy);
+#endif
+
 	// fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
 	// fprintf(stdout, "%s", (const char *)MOM_module_manifest_logical(handle));
 	// fprintf(stdout, "[BOB] Manifest END--------------------------------------------------------------\n");
@@ -365,47 +387,30 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 	bool install = true;
 
 	RemoteWorker *worker = BOB_remote_worker_open(process, MOM_module_architecture(handle));
-	if (worker) {
-		if (MOM_module_manifest_logical(handle)) {
-			if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
-				install &= false; // When this happens sometimes the remote process crashes!
-			}
-		}
 
-		if (!BOB_remote_build_tls(worker, real, MOM_module_tls_table_physical(handle))) {
-			install &= false;  // When this happens sometimes the remote process crashes!
-		}
-
-		// size_t tls_static_size;
-		// if ((tls_static_size = MOM_module_tls_static_size(handle))) {
-		// 	ThreadHandle *thread = BOB_remote_thread(worker);
-		// 	// Leaks memory! And only works for the worker thread, any new threads that spawn will have invalid static TLS data!
-		// 	if (!MOM_thread_static_tls_set(process, thread, MOM_module_tls_index(handle), MOM_module_tls_static_logical(handle), tls_static_size)) {
-		// 		fprintf(stderr, "[BOB] Failed to copy TLS data.\n");
-		// 	}
-		// }
-
-		// ListBase tlsentries = MOM_module_tls(handle);
-		// LISTBASE_FOREACH(ModuleTLS *, tlsentry, &tlsentries) {
-		// 	if (!BOB_remote_call_entry(worker, real, MOM_module_tls_physical(handle, tlsentry))) {
-		// 		install &= false;  // When this happens sometimes the remote process crashes!
-		// 	}
-		// }
-
-		if (!BOB_remote_build_seh(worker, handle, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
-			install &= false;  // When this happens sometimes the remote process crashes!
-		}
-
-		if (!BOB_remote_build_cookie(worker, MOM_module_cookie_physical(handle))) {
-			install &= false;
-		}
-
-		if (!BOB_remote_call_entry(worker, real, MOM_module_entry_physical(handle))) {
+	if (MOM_module_manifest_logical(handle)) {
+		if (!BOB_remote_build_manifest(worker, MOM_module_manifest_logical(handle), MOM_module_manifest_size(handle))) {
 			install &= false; // When this happens sometimes the remote process crashes!
 		}
-
-		BOB_remote_worker_close(worker);
 	}
+
+	if (!BOB_remote_build_seh(worker, handle, MOM_module_seh_physical(handle), MOM_module_seh_count(handle))) {
+		install &= false; // When this happens sometimes the remote process crashes!
+	}
+
+	if (!BOB_remote_build_cookie(worker, MOM_module_cookie_physical(handle))) {
+		install &= false; // When this happens sometimes the remote process crashes!
+	}
+
+	if (!BOB_remote_build_tls(worker, handle)) {
+		install &= false; // When this happens sometimes the remote process crashes!
+	}
+
+	if (!BOB_remote_call_entry(worker, handle)) {
+		install &= false; // When this happens sometimes the remote process crashes!
+	}
+
+	BOB_remote_worker_close(worker);
 
 	if (!install) {
 		MOM_process_free(process, real);

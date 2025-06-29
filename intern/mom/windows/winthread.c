@@ -30,8 +30,10 @@ LPVOID winmom_thread_teb(ProcessHandle *process, ThreadHandle *thread, TEB *teb)
 	if (!NT_SUCCESS(_NtQueryInformationThread(winmom_thread_handle(thread), 0, &information, sizeof(information), NULL))) {
 		return NULL;
 	}
-	if (!MOM_process_read(process, information.TebBaseAddress, teb, sizeof(TEB))) {
-		return NULL;
+	if (process != NULL && teb != NULL) {
+		if (!MOM_process_read(process, information.TebBaseAddress, teb, sizeof(TEB))) {
+			return NULL;
+		}
 	}
 
 	return information.TebBaseAddress;
@@ -50,10 +52,14 @@ ThreadHandle *winmom_thread_open(int identifier) {
 ThreadHandle *winmom_thread_spawn(ProcessHandle *process, void *procedure, void *argument) {
 	HANDLE thread;
 
+#if 1
 	fnNtCreateThreadEx _NtCreateThreadEx = (fnNtCreateThreadEx)winmom_resolve_proc("ntdll.dll", "NtCreateThreadEx");
 	if (!NT_SUCCESS(_NtCreateThreadEx(&thread, THREAD_ALL_ACCESS, NULL, winmom_process_handle(process), procedure, argument, 0, 0, 0, 0, NULL))) {
 		return NULL;
 	}
+#else
+	thread = (ThreadHandle *)CreateRemoteThread(winmom_process_handle(process), NULL, 0, procedure, argument, 0, NULL);
+#endif
 
 	return (ThreadHandle *)thread;
 }
@@ -115,6 +121,10 @@ bool winmom_thread_static_tls_set(ProcessHandle *process, ThreadHandle *thread, 
 	return false;
 }
 
+void *winmom_thread_teb_address(ThreadHandle *thread) {
+	return winmom_thread_teb(NULL, thread, NULL);
+}
+
 /** \} */
 
 /* -------------------------------------------------------------------- */
@@ -130,6 +140,7 @@ fnMOM_thread_join MOM_thread_join = winmom_thread_join;
 fnMOM_thread_suspend MOM_thread_suspend = winmom_thread_suspend;
 fnMOM_thread_resume MOM_thread_resume = winmom_thread_resume;
 fnMOM_thread_identifier MOM_thread_identifier = winmom_thread_identifier;
+fnMOM_thread_teb MOM_thread_teb = winmom_thread_teb_address;
 
 fnMOM_thread_static_tls_set MOM_thread_static_tls_set = winmom_thread_static_tls_set;
 
