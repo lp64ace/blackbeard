@@ -270,14 +270,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 
 		size_t ptrsize = MOM_module_architecture_pointer_size(MOM_module_architecture(handle));
 
-#if 0
-		if (MOM_module_import_is_ordinal(handle, imported)) {
-			fprintf(stdout, "[0x%p] < 0x%p | #%d\n", MOM_module_import_physical_funk(handle, imported), address, MOM_module_import_expordinal(handle, imported));
-		} else {
-			fprintf(stdout, "[0x%p] < 0x%p | %s\n", MOM_module_import_physical_funk(handle, imported), address, MOM_module_import_expname(handle, imported));
-		}
-#endif
-
 		/**
 		 * There are imports like #QueryOOBESupport from kernel32.dll that on some platforms are non-existing!
 		 * These are not reasons to fail the procedure, ignore these imports...
@@ -296,6 +288,13 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			else {
 				fprintf(stderr, "[BOB] Import #%hd was not resolved correctly!", MOM_module_import_expordinal(handle, imported));
 			}
+
+			/**
+			 * I have never seen imports fail to load for a good reason, delay imports on the other hand...
+			 */
+
+			MOM_process_free(process, real);
+			return NULL;
 		}
 	}
 
@@ -351,21 +350,6 @@ void *BOB_manual_map_module(ProcessHandle *process, ModuleHandle *handle, int fl
 			}
 		}
 	}
-
-#if 0
-	void *copy = malloc(MOM_module_size(handle));
-	MOM_process_read(process, real, copy, MOM_module_size(handle));
-
-	fprintf(stdout, "\n");
-	for (size_t i = 0; i < MOM_module_size(handle); i++) {
-		if (i == 0 || (i % 16) == 0) {
-			fprintf(stdout, "\n0x%p ", (void *)POINTER_OFFSET(real, i));
-		}
-		fprintf(stdout, "%02x ", *(const unsigned char *)POINTER_OFFSET(copy, i));
-	}
-	fprintf(stdout, "\n");
-	free(copy);
-#endif
 
 	// fprintf(stdout, "[BOB] Manifest -----------------------------------------------------------------\n");
 	// fprintf(stdout, "%s", (const char *)MOM_module_manifest_logical(handle));
